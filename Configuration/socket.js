@@ -6,7 +6,6 @@ const { getFirstGameQuestions } = require("./comman");
 // Function to check for inactive players (waiting for more than 2 minutes)
 function checkInactivePlayers(waitingPlayers, io) {
   const currentTime = Date.now();
-
   waitingPlayers.forEach((player, index) => {
     const waitTime = currentTime - player.timestamp;
     if (waitTime > 2 * 60 * 1000) {
@@ -55,13 +54,12 @@ async function joinQueue(socket, waitingPlayers, io, playerId, level) {
     level,
   };
   console.log('playerData', playerData);
-
   // Check if player exists and is active
   const player = await Player.findById(playerId);
   if (!player) {
     throw new Error("Player not found");
   }
-  if (player.userType !== "active") {
+  if (player?.userType !== "active") {
     socket.emit(
       "disconnectMessage",
       "You are inactive and cannot join the queue."
@@ -69,12 +67,21 @@ async function joinQueue(socket, waitingPlayers, io, playerId, level) {
     socket.disconnect();
     return;
   }
+  // Check for duplicate playerId before adding
+  const isPlayerAlreadyInQueue = waitingPlayers.some(
+    (existingPlayer) => existingPlayer?.playerId === playerId
+  );
 
-  // Add player to waiting list
-  waitingPlayers.push(playerData);
+  if (!isPlayerAlreadyInQueue) {
+    waitingPlayers.push(playerData);
+    console.log('Player added to waiting list:', playerData);
+  } else {
+    console.log('Player already in the waiting list:', playerData);
+  }
 
   // Try to find a match if there are at least two players in the queue
-  if (waitingPlayers.length >= 2) {
+  if (waitingPlayers?.length >= 2) {
+    console.log('waitingPlayers ======== 1 =======>', waitingPlayers);
     matchPlayers(waitingPlayers, io);
   }
 
@@ -92,7 +99,6 @@ async function joinQueue(socket, waitingPlayers, io, playerId, level) {
 // Function to handle player matching and room creation
 async function matchPlayers(waitingPlayers, io) {
   const [player1, player2] = waitingPlayers.splice(0, 2);
-
   // Ensure both players are active
   const isActive1 = await Player.findById(player1.playerId);
   const isActive2 = await Player.findById(player2.playerId);
@@ -111,15 +117,15 @@ async function matchPlayers(waitingPlayers, io) {
     }
     return;
   }
-
-  // Check if both players are on the same level
   // Start the process of looking for a matching player
   await findMatchingPlayer(waitingPlayers, io);
-  // if (player1.level !== player2.level) {
-  //   waitingPlayers.unshift(player1, player2); // Return players to queue if levels do not match
-  //   console.log("Players have different levels, waiting for same-level match.");
-  //   return;
-  // }
+  // Check if both players are on the same level
+  if (player1.level !== player2.level) {
+    waitingPlayers.unshift(player1, player2); // Return players to queue if levels do not match
+    console.log("Players have different levels, waiting for same-level match.");
+    return;
+  }
+  console.log('waitingPlayers', waitingPlayers);
 
   // Check wait time
   const waitTime = Date.now() - player1.timestamp;
@@ -225,22 +231,40 @@ async function createMatch(io, player1, player2, waitingPlayers) {
     player1Socket.join(roomCode);
     player2Socket.join(roomCode);
 
-    // Fetch initial game questions
-    await Promise.all([
-      getFirstGameQuestions({
-        playerId: player1?.playerId,
-        level: player1?.level,
-        gametype: "multiple",
-        roomCode: roomCode,
-      }),
-      getFirstGameQuestions({
-        playerId: player2?.playerId,
-        level: player2?.level,
-        gametype: "multiple",
-        roomCode: roomCode,
-      }),
-    ]);
+    // // Fetch initial game questions
+    // await Promise.all([
+    //   getFirstGameQuestions({
+    //     playerId: player1?.playerId,
+    //     level: player1?.level,
+    //     gametype: "multiple",
+    //     roomCode: roomCode,
+    //   }),
+    //   getFirstGameQuestions({
+    //     playerId: player2?.playerId,
+    //     level: player2?.level,
+    //     gametype: "multiple",
+    //     roomCode: roomCode,
+    //   }),
+    // ]);
 
+    const playerIds = [player1?.playerId, player2?.playerId];
+
+    const playerQuestions = await getFirstGameQuestions({
+      playerIds, // Pass the array of player IDs
+      level: player1?.level, // Assume both players are on the same level
+      questionCount: 10,
+      roomCode: roomCode,
+      gametype: "multiple",
+    });
+
+    // Handle the results
+    playerQuestions.forEach((result) => {
+      if (result.error) {
+        console.error(`Error for Player ${result?.playerId}: ${result?.error}`);
+      } else {
+        console.log(`Questions for Player ${result?.playerId}:`, result?.questions);
+      }
+    });
     // Notify both players
     io.to(roomCode).emit("startGame", roomCode);
     io.to(roomCode).emit("playersReady", {

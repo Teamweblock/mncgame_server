@@ -4,7 +4,6 @@ const Level = require("../../model/Level.model");
 const Question = require("../../model/FirstGame/firstgameQuestion.model");
 const ErrorHander = require("../../utils/errorhandaler");
 const catchAsyncErrors = require("../../middleware/catchAsyncErrors");
-const { default: mongoose } = require("mongoose");
 
 // calculate Score
 function calculateScore(correctAnswer, userAnswer) {
@@ -222,22 +221,19 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
     const questionCount = parseInt(req.query.count) || 10;
 
     try {
-      // Find player
+      // Find Player
       const player = await Player.findById(playerId);
-      if (!player) return res.status(404).json({ error: "Player not found." });
+      if (!player) {
+        return res.status(404).json({ error: "Player not found." });
+      }
 
-      // // get first game questions
-      // const formattedQuestions = await getfisrtgameQuestions({
-      //   playerId,
-      //   level,
-      //   questionCount,
-      // });
-      // Find level by level number
+      // Find Level
       const levelData = await Level.findOne({ levelNumber: level });
+      if (!levelData) {
+        return res.status(404).json({ error: "Level not found." });
+      }
 
-      if (!levelData) return res.status(404).json({ msg: "Level not found" });
-
-      // Check if the player already completed this level
+      // Check if the level is already completed
       const sessionWithCompletedLevel = await Gamesession.findOne({
         playerId,
         completedLevels: levelData._id,
@@ -248,13 +244,13 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           .json({ message: "You have already completed this level." });
       }
 
-      // Retrieve or create session
+      // Retrieve or create a game session
       let gameSession = await Gamesession.findOne({ playerId });
       if (!gameSession) {
         gameSession = await Gamesession.create({ playerId });
       }
 
-      // Check if level-specific questions are already in session
+      // Check for existing level data in session
       let levelScoreData = gameSession.levelScores.find(
         (score) => score.level.toString() === levelData._id.toString()
       );
@@ -264,51 +260,25 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         levelScoreData &&
         levelScoreData.questions.length >= (questionCount || 10)
       ) {
-        questions = await Question.aggregate([
-          {
-            $match: {
-              _id: { $in: levelScoreData.questions.map((q) => q.questionId) },
-            },
-          },
-          // {
-          //   $project: {
-          //     questionId: "$_id",
-          //     questionText: "$questionText",
-          //     answer: { $literal: null },
-          //     score: { $literal: 0 },
-          //   },
-          // },
-          {
-            $project: {
-              questionId: {
-                _id: "$_id",
-                questionText: "$questionText",
-                correctOptions: "$correctOptions",
-                level: "$level",
-                // Add any additional fields from your schema here
-              },
-              questionText: "$questionText",
-              answer: { $literal: null },
-              score: { $literal: 0 },
-            },
-          },
-        ]);
+        // Retrieve existing questions if sufficient
+        questions = await Question.find({
+          _id: { $in: levelScoreData.questions.map((q) => q.questionId) },
+        });
       } else {
-        // Fetch new questions if needed
+        // Fetch new questions if insufficient
         questions = await Question.aggregate([
           { $match: { level: levelData._id } },
           { $sample: { size: questionCount || 10 } },
         ]);
 
-        // Handle case where no questions are found
-        if (questions?.length === 0) {
+        if (!questions.length) {
           return res
             .status(404)
             .json({ error: "No questions found for this level." });
         }
 
         const formattedQuestions = questions.map((question) => ({
-          questionId: question,
+          questionId: question._id,
           answer: null,
           score: 0,
         }));
@@ -317,93 +287,22 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           levelScoreData.questions = formattedQuestions;
         } else {
           gameSession.levelScores.push({
-            level: new mongoose.Types.ObjectId(levelData._id), // Convert to ObjectId,
+            level: levelData._id,
             score: 0,
             questions: formattedQuestions,
           });
-          gameSession.currentLevel = level
-
+          gameSession.currentLevel = level;
         }
+
         await gameSession.save();
       }
-      // Return formatted questions with question text
-      const formattedQuestions = levelScoreData?.questions.map((storedQuestion) => {
-        // Find the matching question from the database
-        return questions.find((question) =>
-          question._id.toString() === storedQuestion.questionId.toString()
-        );
-      }).filter(Boolean); // Remove any null values if no match is found
-
-
-      // // Find level by level number
-      // const getlevel = await Level.findOne({ levelNumber: level });
-      // if (!getlevel) return next(new ErrorHander("Level not found", 404));
-
-      // // Check if the player already completed this level
-      // const sessionWithCompletedLevel = await Gamesession.findOne({
-      //   playerId,
-      //   completedLevels: getlevel._id, // Ensure the comparison uses ObjectId
-      // });
-
-      // if (sessionWithCompletedLevel) {
-      //   return res
-      //     .status(400)
-      //     .json({ msg: "You have already completed this level." });
-      // }
-
-      // // Retrieve or create session
-      // let Qsession = await Gamesession.findOne({ playerId });
-      // if (!Qsession) {
-      //   Qsession = await Gamesession.create({ playerId });
-      // }
-
-      // // Check if level-specific questions are already in session
-      // let levelData = Qsession.levelScores.find(
-      //   (score) => score.level.toString() === getlevel._id.toString()
-      // );
-
-      // let questions;
-      // if (levelData && levelData?.questions?.length >= questionCount) {
-      //   questions = await Question.find({
-      //     _id: { $in: levelData.questions.map((q) => q.questionId) },
-      //   });
-      // } else {
-      //   questions = await Question.aggregate([
-      //     { $match: { level: getlevel._id } },
-      //     { $sample: { size: questionCount } },
-      //   ]);
-
-      // if (questions.length === 0) {
-      //   return res
-      //     .status(404)
-      //     .json({ error: "No questions found for this level." });
-      // }
-
-      //   const formattedQuestions = questions.map((question) => ({
-      //     questionId: question._id,
-      //     answer: null,
-      //     score: 0,
-      //   }));
-
-      //   if (levelData) {
-      //     levelData.questions = formattedQuestions;
-      //   } else {
-      //     Qsession.levelScores.push({
-      //       level: new mongoose.Types.ObjectId(getlevel._id), // Convert to ObjectId
-      //       score: 0,
-      //       questions: formattedQuestions,
-      //     });
-      //   }
-
-      //   await Qsession.save();
-      // }
-
-      // const formattedQuestions = questions.map((question) => ({
-      //   questionId: question._id,
-      //   questionText: question.text,
-      //   answer: null,
-      //   score: 0,
-      // }));
+      // Format questions for response
+      const formattedQuestions = questions.map((question) => ({
+        questionId: question?._id,
+        questionText: question?.questionText,
+        correctOptions: question?.correctOptions,
+        level: question?.level,
+      }));
 
       return res.status(200).json({
         formattedQuestions,
@@ -492,7 +391,7 @@ module.exports.getplayerResult = catchAsyncErrors(async (req, res) => {
 
     // Filter the specific level score
     const levelScore = player.levelScores.find(
-      (score) => score.level.toString() === getLevel._id.toString()
+      (score) => score.level.toString() === getLevel?._id.toString()
     );
 
     if (!levelScore) {
@@ -505,7 +404,7 @@ module.exports.getplayerResult = catchAsyncErrors(async (req, res) => {
       levelScores: [levelScore], // Only include the filtered level score
     };
 
-    res.status(200).json(response);
+    return res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching level score:", error);
     res.status(500).json({ error: "Failed to fetch level score." });

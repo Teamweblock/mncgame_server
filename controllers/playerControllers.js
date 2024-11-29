@@ -38,7 +38,6 @@ module.exports.registerPlayer = catchAsyncErrors(async (req, res, next) => {
 // Login API
 module.exports.loginPlayer = catchAsyncErrors(async (req, res, next) => {
   const { email, password } = req.body;
-
   try {
     const player = await Player.findOne({ email });
 
@@ -106,7 +105,7 @@ module.exports.googleLogin = catchAsyncErrors(async (req, res, next) => {
       });
       await player.save();
     }
-    
+
     // Create JWT token for the player
     const token = jwt.sign({ playerId: player._id }, JWT_ACCESS_SECRET, {
       expiresIn: JWT_ACCESS_TIME,
@@ -183,7 +182,6 @@ module.exports.googleCallback = catchAsyncErrors(async (req, res, next) => {
     });
   })(req, res, next); // Pass req, res, and next for middleware chaining
 });
-
 
 //get all Players
 module.exports.getallPlayers = catchAsyncErrors(async (req, res) => {
@@ -289,6 +287,7 @@ module.exports.forgotpassword = catchAsyncErrors(async (req, res) => {
   });
 });
 
+// resetpassword
 module.exports.resetpassword = catchAsyncErrors(async (req, res) => {
   const { newPassword, confirmPassword, clientToken } = req.body;
 
@@ -339,4 +338,32 @@ module.exports.resetpassword = catchAsyncErrors(async (req, res) => {
     token,
     msg: "Password changed successfully",
   });
+});
+
+// updatepassword
+module.exports.updatepassword = catchAsyncErrors(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+  try {
+    const user = await Player.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Use the matchPassword method
+    const isMatch = await Player.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update the password in the database
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 });
