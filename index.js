@@ -75,8 +75,8 @@ io.on('connection', (socket) => {
   });
 
   // Handle player disconnect
-  socket.on('disconnect', () => {
-    const index = waitingPlayers.findIndex((player) => player.playerId === socket.id);
+  socket.on('disconnectMessage', () => {
+    const index = waitingPlayers.findIndex((player) => player?.playerId === socket?.id);
     if (index !== -1) {
       waitingPlayers.splice(index, 1);
     }

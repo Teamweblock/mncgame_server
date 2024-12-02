@@ -17,7 +17,8 @@ const {
   updategameSessions,
   getplayerResult,
   joinmultipleGame,
-  getLevelAccess
+  getLevelAccess,
+  overallPerformance
 } = require("../controllers/game_first/gameSessionControllers");
 const { isAuthenticatedUser } = require("../middleware/auth");
 
@@ -38,6 +39,8 @@ router.post("/submitanswer", isAuthenticatedUser, submitAnswer);
 //  get player result
 router.post("/getplayerResult", isAuthenticatedUser, getplayerResult);
 
+//  get player result
+router.get("/overallPerformance", isAuthenticatedUser, overallPerformance);
 
 
 /* --------- quetion crud section ----------  */

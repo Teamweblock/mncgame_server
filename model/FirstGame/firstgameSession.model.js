@@ -27,7 +27,7 @@ const firstgameSessionSchema = new mongoose.Schema(
           {
             questionId: {
               type: mongoose.Schema.Types.ObjectId,
-              ref: "Question",
+              ref: "FirstgameQuestion",
             },
             answer: { type: String },
             score: { type: Number, default: 0 },

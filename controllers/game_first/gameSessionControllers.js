@@ -4,6 +4,7 @@ const Level = require("../../model/Level.model");
 const Question = require("../../model/FirstGame/firstgameQuestion.model");
 const ErrorHander = require("../../utils/errorhandaler");
 const catchAsyncErrors = require("../../middleware/catchAsyncErrors");
+const { default: mongoose } = require("mongoose");
 
 // calculate Score
 function calculateScore(correctAnswer, userAnswer) {
@@ -260,25 +261,43 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         levelScoreData &&
         levelScoreData.questions.length >= (questionCount || 10)
       ) {
-        // Retrieve existing questions if sufficient
-        questions = await Question.find({
-          _id: { $in: levelScoreData.questions.map((q) => q.questionId) },
-        });
+        questions = await Question.aggregate([
+          {
+            $match: {
+              _id: { $in: levelScoreData.questions.map((q) => q.questionId) },
+            },
+          },
+          {
+            $project: {
+              questionId: {
+                _id: "$_id",
+                questionText: "$questionText",
+                correctOptions: "$correctOptions",
+                level: "$level",
+                // Add any additional fields from your schema here
+              },
+              questionText: "$questionText",
+              answer: { $literal: null },
+              score: { $literal: 0 },
+            },
+          },
+        ]);
       } else {
-        // Fetch new questions if insufficient
+        // Fetch new questions if needed
         questions = await Question.aggregate([
           { $match: { level: levelData._id } },
           { $sample: { size: questionCount || 10 } },
         ]);
 
-        if (!questions.length) {
+        // Handle case where no questions are found
+        if (questions?.length === 0) {
           return res
             .status(404)
             .json({ error: "No questions found for this level." });
         }
 
         const formattedQuestions = questions.map((question) => ({
-          questionId: question._id,
+          questionId: question,
           answer: null,
           score: 0,
         }));
@@ -287,7 +306,7 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           levelScoreData.questions = formattedQuestions;
         } else {
           gameSession.levelScores.push({
-            level: levelData._id,
+            level: new mongoose.Types.ObjectId(levelData._id), // Convert to ObjectId,
             score: 0,
             questions: formattedQuestions,
           });
@@ -296,13 +315,13 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
 
         await gameSession.save();
       }
-      // Format questions for response
-      const formattedQuestions = questions.map((question) => ({
-        questionId: question?._id,
-        questionText: question?.questionText,
-        correctOptions: question?.correctOptions,
-        level: question?.level,
-      }));
+      // Return formatted questions with question text
+      const formattedQuestions = levelScoreData?.questions.map((storedQuestion) => {
+        // Find the matching question from the database
+        return questions.find((question) =>
+          question._id.toString() === storedQuestion.questionId.toString()
+        );
+      }).filter(Boolean); // Remove any null values if no match is found
 
       return res.status(200).json({
         formattedQuestions,
@@ -440,5 +459,51 @@ module.exports.joinmultipleGame = catchAsyncErrors(async (req, res) => {
     return res
       .status(500)
       .json({ error: "Failed to join the game. Please try again later." });
+  }
+});
+
+module.exports.overallPerformance = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+
+  try {
+    const playerSession = await Gamesession.aggregate([
+      { $match: { playerId: new mongoose.Types.ObjectId(playerId) } }, // Find the player's session
+      { $unwind: "$levelScores" }, // Unwind the levelScores array to process each entry
+      {
+        $project: {
+          "levelScores.score": 1, // Get the score for each level
+          "levelScores.level": 1, // Get the level reference
+        },
+      },
+      {
+        $group: {
+          _id: "$playerId", // Group by playerId
+          totalScore: { $sum: "$levelScores.score" }, // Sum all scores
+          levelCount: { $sum: 1 }, // Count the number of levels played
+          levelScores: { $push: "$levelScores" }, // Push level scores into an array
+        },
+      },
+    ]);
+
+    if (playerSession.length > 0) {
+      const playerData = playerSession[0];
+      const totalScore = playerData.totalScore;
+      const levelCount = playerData.levelCount;
+
+      // You can now calculate the overall score percentage
+      const overallScorePercentage = (totalScore / (levelCount * 100)) * 100; // Assuming max score per level is 100
+
+      return res.json({
+        levelScores: playerData.levelScores, // Array of level scores
+        overallScorePercentage: overallScorePercentage.toFixed(2), // Overall score percentage
+      });
+    } else {
+      return res.status(404).json({ error: "Player session not found." });
+    }
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Failed to get particular player's overall performance. Please try again later." });
   }
 });

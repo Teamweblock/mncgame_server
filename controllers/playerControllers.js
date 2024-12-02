@@ -230,35 +230,61 @@ module.exports.deletePlayer = catchAsyncErrors(async (req, res, next) => {
 // Update Player
 module.exports.updatePlayers = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
-  const { firstName, lastName, email, score } = req.body;
-  let Players = await Player.findById(id);
 
-  if (!Players) {
-    return next(new ErrorHander("Cannot found Players..", 404));
+  const { firstName, lastName, email, mobileNumber, educationDetails, professionalDetails } = req.body;
+
+  // Find the player
+  const player = await Player.findById(id);
+
+  if (!player) {
+    return next(new ErrorHander("Cannot find Player.", 404));
   }
+
   try {
-    const updatedPlayer = await Player.findByIdAndUpdate(
-      id,
-      {
-        firstName,
-        lastName,
-        email,
-        score,
-      },
-      { new: true }
-    );
+    // Update player fields dynamically
+    const updateFields = {};
+    if (firstName) updateFields.firstName = firstName;
+    if (lastName) updateFields.lastName = lastName;
+    if (email) updateFields.email = email;
+    if (mobileNumber) updateFields.mobileNumber = mobileNumber;
+
+    // Handle nested objects for educationDetails and professionalDetails
+    if (educationDetails) {
+      updateFields.educationDetails = {
+        ...player.educationDetails.toObject(), // Preserve existing data
+        ...educationDetails, // Update with new data
+      };
+    }
+
+    if (professionalDetails) {
+      updateFields.professionalDetails = {
+        ...player.professionalDetails.toObject(), // Preserve existing data
+        ...professionalDetails, // Update with new data
+      };
+    }
+
+    // Find and update player
+    const updatedPlayer = await Player.findByIdAndUpdate(id, updateFields, {
+      new: true,
+      runValidators: true, // Ensure schema validation
+    });
 
     if (!updatedPlayer) {
       return res.status(404).json({ message: "Player not found" });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      msg: "Updated successfully...",
+      msg: "Updated successfully.",
       updatedPlayer,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update Player" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update Player",
+      error: error.message,
+    });
   }
 });
 
