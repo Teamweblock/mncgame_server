@@ -1,9 +1,9 @@
-const Question = require("../../model/FirstGame/firstgameQuestion.model");
+const Question = require("../../model/FirstGame/singleQuestion.model");
 const ErrorHander = require("../../utils/errorhandaler");
 const catchAsyncErrors = require("../../middleware/catchAsyncErrors");
 
 // create Questions
-module.exports.creatQuestion = catchAsyncErrors(async (req, res, next) => {
+module.exports.creatsingleQuestion = catchAsyncErrors(async (req, res, next) => {
   const questionsData = req.body; // Array of question objects
   try {
     const questions = await Question.insertMany(questionsData);
@@ -17,12 +17,15 @@ module.exports.creatQuestion = catchAsyncErrors(async (req, res, next) => {
       questions,
     });
   } catch (error) {
-    next(new ErrorHander("Error occurred while creating questions", 500));
+    console.log('error', error);
+    res.status(500).json({
+      message: "Error occurred while creating questions"
+    });
   }
 });
 
 //get all Questions
-module.exports.getallQuestions = catchAsyncErrors(async (req, res) => {
+module.exports.getallsingleQuestions = catchAsyncErrors(async (req, res) => {
   try {
     const Questions = await Question.find();
 
@@ -36,7 +39,7 @@ module.exports.getallQuestions = catchAsyncErrors(async (req, res) => {
 });
 
 //getsingleQuestions
-module.exports.getsingleQuestions = catchAsyncErrors(async (req, res, next) => {
+module.exports.getsinglesingleQuestions = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
 
   const Questions = await Question.find({ _id: id });
@@ -52,7 +55,7 @@ module.exports.getsingleQuestions = catchAsyncErrors(async (req, res, next) => {
 });
 
 //Delete Question
-module.exports.deleteQuestion = catchAsyncErrors(async (req, res, next) => {
+module.exports.deletesingleQuestion = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
   try {
     const data = await Question.findByIdAndDelete(id);
@@ -66,9 +69,9 @@ module.exports.deleteQuestion = catchAsyncErrors(async (req, res, next) => {
 });
 
 // Update Question
-module.exports.updateQuestions = catchAsyncErrors(async (req, res, next) => {
+module.exports.updatesingleQuestions = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
-  const { questionText, correctOptions, level } = req.body;
+  const { question, answer, level } = req.body;
   let Questions = await Question.findById(id);
 
   if (!Questions) {
@@ -78,8 +81,8 @@ module.exports.updateQuestions = catchAsyncErrors(async (req, res, next) => {
     const updatedQuestion = await Question.findByIdAndUpdate(
       id,
       {
-        questionText,
-        correctOptions,
+        question,
+        answer,
         level,
       },
       { new: true }

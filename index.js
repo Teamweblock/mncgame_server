@@ -14,7 +14,6 @@ const { Server } = require("socket.io"); // Importing socket.io
 const {
   joinQueue,
   checkInactivePlayers,
-  matchPlayers,
 } = require("./Configuration/socket"); // Make sure these functions are correctly exported in 'socket.js'
 
 databaseConnection();
@@ -70,7 +69,6 @@ io.on('connection', (socket) => {
   // Join queue event
   socket.on('joinQueue', ({ playerId, level }) => {
     console.log("playerId", playerId);
-
     joinQueue(socket, waitingPlayers, io, playerId, level);
   });
 
