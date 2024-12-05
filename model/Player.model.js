@@ -28,7 +28,7 @@ const playerSchema = new mongoose.Schema(
     },
     mobileNumber: {
       type: String,
-      unique: true, // Ensure uniqueness
+      // unique: true, // Ensure uniqueness
       match: [/^\d{10}$/, "Please provide a valid 10-digit mobile number"], // Example regex for 10 digits
     },
     password: {
@@ -44,7 +44,7 @@ const playerSchema = new mongoose.Schema(
       enum: ["active", "inactive"],
       default: "inactive", // default to inactive player
     },
-   
+
     address: { type: String },
     educationDetails: {
       currentJob: { type: String },

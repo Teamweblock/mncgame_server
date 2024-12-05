@@ -106,21 +106,19 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         return res.status(404).json({ error: "Player not found." });
       }
 
-      // Find Level
+      // Find Level Data
       const levelData = await Level.findOne({ levelNumber: level });
       if (!levelData) {
         return res.status(404).json({ error: "Level not found." });
       }
 
-      // Check if the level is already completed
+      // Check if the level is already completed by this player
       const sessionWithCompletedLevel = await Gamesession.findOne({
         playerId,
         completedLevels: levelData._id,
       });
       if (sessionWithCompletedLevel) {
-        return res
-          .status(400)
-          .json({ message: "You have already completed this level." });
+        return res.status(400).json({ message: "You have already completed this level." });
       }
 
       // Retrieve or create a game session
@@ -129,22 +127,20 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         gameSession = await Gamesession.create({ playerId });
       }
 
-      // Check for existing level data in session
-      let levelScoreData = gameSession.levelScores.find(
-        (score) => score.level.toString() === levelData._id.toString()
+      // Check if level data already exists in session
+      let levelScoreData = gameSession?.levelScores.find(
+        (score) => score?.level.toString() === levelData?._id.toString()
       );
 
       let questions;
-      if (
-        levelScoreData &&
-        levelScoreData.questions.length >= (questionCount || 10)
-      ) {
+      if (levelScoreData && levelScoreData?.questions?.length >= questionCount) {
+        // Fetch already stored questions if available
         questions = await Question.aggregate([
           {
             $match: {
               _id: { $in: levelScoreData.questions.map((q) => q.questionId) },
             },
-          },
+          }, 
           {
             $project: {
               questionId: {
@@ -161,45 +157,44 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           },
         ]);
       } else {
-        // Fetch new questions if needed
+        // Fetch new questions if not enough are stored
         questions = await Question.aggregate([
           { $match: { level: levelData._id } },
-          { $sample: { size: questionCount || 10 } },
+          { $sample: { size: questionCount } },
         ]);
 
         // Handle case where no questions are found
-        if (questions?.length === 0) {
-          return res
-            .status(404)
-            .json({ error: "No questions found for this level." });
+        if (questions.length === 0) {
+          return res.status(404).json({ error: "No questions found for this level." });
         }
 
+        // Format the questions before saving them
         const formattedQuestions = questions.map((question) => ({
           questionId: question,
           answer: null,
           score: 0,
         }));
 
-        if (levelScoreData) {
-          levelScoreData.questions = formattedQuestions;
-        } else {
-          gameSession.levelScores.push({
-            level: new mongoose.Types.ObjectId(levelData._id), // Convert to ObjectId,
-            score: 0,
-            questions: formattedQuestions,
-          });
-          gameSession.currentLevel = level;
-        }
-
+        // Add new level data to the game session
+        gameSession.levelScores.push({
+          level: levelData._id,
+          score: 0,
+          questions: formattedQuestions,
+        });
+        gameSession.currentLevel = level;
         await gameSession.save();
-      }
-      // Return formatted questions with question text
-      const formattedQuestions = levelScoreData?.questions.map((storedQuestion) => {
-        // Find the matching question from the database
-        return questions.find((question) =>
-          question._id.toString() === storedQuestion.questionId.toString()
+        // Update levelScoreData to reflect new questions
+        levelScoreData = gameSession.levelScores.find(
+          (score) => score?.level.toString() === levelData?._id.toString()
         );
-      }).filter(Boolean); // Remove any null values if no match is found
+      }
+      // Format and return the stored or newly fetched questions
+      const formattedQuestions = levelScoreData.questions.map((storedQuestion) => {
+        const matchingQuestion = questions.find(
+          (question) => question._id.toString() === storedQuestion.questionId.toString()
+        );
+        return matchingQuestion ? matchingQuestion : null;
+      }).filter(Boolean); // Remove null values if no match is found
 
       return res.status(200).json({
         formattedQuestions,
