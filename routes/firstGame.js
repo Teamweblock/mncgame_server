@@ -10,7 +10,15 @@ const {
 } = require("../controllers/game_first/singlequestionControllers");
 
 const {
-  getQuestionsForLevel,
+  creatmultipleQuestion,
+  getallmultipleQuestions,
+  getsinglemultipleQuestions,
+  updatemultipleQuestions,
+  deletemultipleQuestion,
+} = require("../controllers/game_first/multiplequestionControllers");
+
+const {
+  getQuestionsForsingleLevel,
   submitAnswer,
   creatgameSession,
   getallgameSessions,
@@ -18,10 +26,14 @@ const {
   deletegameSession,
   updategameSessions,
   getplayerResult,
-  // joinmultipleGame,
   getLevelAccess,
   overallPerformance
 } = require("../controllers/game_first/singlegameSessionControllers");
+
+const {
+  joinmultipleGame,
+  getQuestionsFormultipleLevel
+} = require("../controllers/game_first/multiplegameSessionControllers");
 
 /* --------- single player crud section --------- */
 
@@ -42,16 +54,35 @@ router.delete("/single/question/", deletesingleQuestion);
 //Update
 router.put("/single/question/", updatesingleQuestions);
 
+/* --------- multiple player crud section ----------  */
+
+/*  quetion crud section  */
+
+// add
+router.post("/multiple/question/create", creatmultipleQuestion);
+
+//getAllmultipleQuestions
+router.get("/multiple/question/all", getallmultipleQuestions);
+
+// get single multipleQuestions
+router.get("/multiple/question/single", getsinglemultipleQuestions);
+
+//Delete
+router.delete("/multiple/question/", deletemultipleQuestion);
+
+//Update
+router.put("/multiple/question/", updatemultipleQuestions);
+
+// ---------------------------------------------------------------------------------------
+
 /* --------- firstgame crud section ----------  */
 
 // check player valid level
 router.post("/checkVaildlevel", isAuthenticatedUser, getLevelAccess);
 
 //get Questions For Level
-router.post("/getQuestionsForLevel", isAuthenticatedUser, getQuestionsForLevel);
-
-//joinmultipleGame
-// router.post("/joinmultipleGame", isAuthenticatedUser, joinmultipleGame);
+router.post("/single/getQuestionsForLevel", isAuthenticatedUser, getQuestionsForsingleLevel);
+router.post("/multiple/getQuestionsForLevel", isAuthenticatedUser, getQuestionsFormultipleLevel);
 
 // submit answer
 router.post("/submitanswer", isAuthenticatedUser, submitAnswer);
@@ -79,5 +110,8 @@ router.delete("/", deletegameSession);
 
 //Update
 router.put("/", updategameSessions);
+
+//joinmultipleGame
+router.post("/joinmultipleGame", isAuthenticatedUser, joinmultipleGame);
 
 module.exports = router;

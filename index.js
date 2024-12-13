@@ -9,12 +9,13 @@ const { PORT } = require("./config");
 const cors = require("cors");
 const databaseConnection = require("./database/db");
 const { Server } = require("socket.io"); // Importing socket.io
+// const { socketHandler } = require("./Configuration/socket");
 
 // Game Logic Imports
 const {
   joinQueue,
   checkInactivePlayers,
-} = require("./Configuration/socket"); // Make sure these functions are correctly exported in 'socket.js'
+} = require("./Configuration/firstsocket"); // Make sure these functions are correctly exported in 'socket.js'
 
 databaseConnection();
 // Configure session middleware
@@ -63,6 +64,7 @@ const io = new Server(server, {
 // In-memory player queue
 const waitingPlayers = [];
 // Handle socket connections and game logic
+// socketHandler(io); 
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 

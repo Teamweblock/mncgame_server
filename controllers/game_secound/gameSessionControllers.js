@@ -286,6 +286,10 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         }
 
         await Qsession.save();
+
+        levelData = Qsession.levelScores.find(
+          (score) => score.level.toString() === getlevel._id.toString()
+        );
       }
       // Return formatted questions with question text
       const formattedQuestions = levelData?.questions.map((storedQuestion) => {
@@ -294,14 +298,6 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           question._id.toString() === storedQuestion.questionId.toString()
         );
       }).filter(Boolean); // Remove any null values if no match is found
-
-      // const formattedQuestions = questions.map((question) => ({
-      //   questionId: question,
-      //   questionText: question.questionText,
-      //   answer: null,
-      //   score: 0,
-      // }));
-
       return res.status(200).json({
         formattedQuestions,
         status: true,

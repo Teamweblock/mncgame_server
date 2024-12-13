@@ -1,4 +1,4 @@
-const Gamesession = require("../model/FirstGame/firstgameSession.model");
+const Gamesession = require("../model/FirstGame/multipleSession.model");
 const Player = require("../model/Player.model");
 const { getFirstGameQuestions } = require("./comman");
 
@@ -61,25 +61,30 @@ async function joinQueue(socket, levelGroups, io, playerId, level) {
 
 // Function to handle player matching and room creation
 async function matchPlayers(waitingPlayers, io, level) {
-  while (waitingPlayers.length >= 2) {
-    const [player1, player2] = waitingPlayers.splice(0, 2);
+  console.log('waitingPlayers', waitingPlayers);
 
-    // Ensure both players are active
-    const isActive1 = await Player.findById(player1.playerId);
-    const isActive2 = await Player.findById(player2.playerId);
+  while (waitingPlayers.length >= 3) {
+    const [player1, player2, player3] = waitingPlayers.splice(0, 3);
 
-    if (!isActive1 || isActive1?.userType !== "active") {
-      disconnectPlayer(player1, io, "Inactive user cannot join.");
-      continue; // Skip to the next match
+    // Check if all players are active
+    const isActivePlayers = await Promise.all([
+      Player.findById(player1.playerId),
+      Player.findById(player2.playerId),
+      Player.findById(player3.playerId),
+    ]);
+    if (isActivePlayers.some((player) => !player || player.userType !== "active")) {
+      // Handle inactive players and clean up
+      [player1, player2, player3].forEach((player, index) => {
+        if (!isActivePlayers[index] || isActivePlayers[index]?.userType !== "active") {
+          disconnectPlayer(player, io, "Inactive user cannot join.");
+        } else {
+          waitingPlayers.push(player); // Re-add active players
+        }
+      });
+      continue; // Skip this iteration
     }
-
-    if (!isActive2 || isActive2?.userType !== "active") {
-      disconnectPlayer(player2, io, "Inactive user cannot join.");
-      continue; // Skip to the next match
-    }
-
-    // Create the match for the two players
-    await createMatch(io, player1, player2, waitingPlayers);
+    // Proceed to create a match
+    await createMatch(io, player1, player2, player3, waitingPlayers);
   }
 }
 
@@ -93,19 +98,21 @@ async function disconnectPlayer(playerData, io, message) {
 }
 
 // Function to create a match and setup a room for both players
-async function createMatch(io, player1, player2, waitingPlayers) {
+async function createMatch(io, player1, player2, player3, waitingPlayers) {
   const roomCode = `room-${Math.random().toString(36).substr(2, 9)}`;
 
   const player1Socket = io.sockets.sockets.get(player1.socketId);
   const player2Socket = io.sockets.sockets.get(player2.socketId);
+  const player3Socket = io.sockets.sockets.get(player3.socketId);
 
-  if (player1Socket && player2Socket) {
+  if (player1Socket && player2Socket && player3Socket) {
     // Add players to the room
     player1Socket.join(roomCode);
     player2Socket.join(roomCode);
+    player3Socket.join(roomCode);
 
     // Fetch initial game questions
-    const playerIds = [player1?.playerId, player2?.playerId];
+    const playerIds = [player1?.playerId, player2?.playerId, player3?.playerId];
     const playerQuestions = await getFirstGameQuestions({
       playerIds, // Pass the array of player IDs
       level: player1?.level, // Assume both players are on the same level
@@ -113,6 +120,7 @@ async function createMatch(io, player1, player2, waitingPlayers) {
       roomCode: roomCode,
       gametype: "multiple",
     });
+    console.log('playerQuestions ------------> ', playerQuestions);
 
     // Handle the results
     playerQuestions.forEach((result) => {
@@ -127,6 +135,7 @@ async function createMatch(io, player1, player2, waitingPlayers) {
     io.to(roomCode).emit("playersReady", {
       player1Id: player1.playerId,
       player2Id: player2.playerId,
+      player3Id: player3.playerId,
     });
 
     console.log(`Players paired in room: ${roomCode}`);
@@ -143,23 +152,19 @@ async function createMatch(io, player1, player2, waitingPlayers) {
 }
 
 // Function to handle when a player exits or disconnects
-async function handlePlayerExit(disconnectedPlayer, remainingPlayer, io, waitingPlayers) {
+async function handlePlayerExit(disconnectedPlayer, remainingPlayers, io, waitingPlayers) {
   console.log(`Player ${disconnectedPlayer.playerId} disconnected.`);
-
-  // Notify the remaining player
-  const remainingPlayerSocket = io.sockets.sockets.get(
-    remainingPlayer.socketId
-  );
-  if (remainingPlayerSocket) {
-    remainingPlayerSocket.emit("disconnectMessage", {
-      message: `Player ${disconnectedPlayer.playerId} has disconnected. You will be returned to the queue to find a new match.`,
-    });
-
-    // Add the remaining player back to the waiting queue to find a new opponent
-    waitingPlayers.push(remainingPlayer);
-    // You can also optionally clear the room or return the disconnected player to the queue
-    remainingPlayerSocket.leave(disconnectedPlayer.roomCode); // Leave the room
-  }
+  console.log('remainingPlayers', remainingPlayers);
+  remainingPlayers.forEach((remainingPlayer) => {
+    const remainingPlayerSocket = io.sockets.sockets.get(remainingPlayer.socketId);
+    if (remainingPlayerSocket) {
+      remainingPlayerSocket.emit("disconnectMessage", {
+        message: `Player ${disconnectedPlayer?.playerId} has disconnected. You will be returned to the queue to find a new match.`,
+      });
+      waitingPlayers.push(remainingPlayer); // Add back to the queue
+      remainingPlayerSocket.leave(disconnectedPlayer.roomCode); // Leave the room
+    }
+  });
 }
 
 // Function to check for inactive players (waiting for more than 2 minutes)
@@ -180,61 +185,6 @@ async function checkInactivePlayers(waitingPlayers, io) {
       }
     }
   });
-}
-
-// Room creation function to handle paired players
-const createRoomAndNotifyPlayers = async (player1, player2, io, level) => {
-  // Create room with unique room code
-  const roomCode = generateRoomCode();
-
-  // Update both player sessions
-  await Gamesession.updateMany(
-    { playerId: { $in: [player1.id, player2.id] } },
-    {
-      $set: {
-        "levelScores.$[elem].isPaired": true,
-        "levelScores.$[elem].roomCode": roomCode,
-      },
-    },
-    { arrayFilters: [{ "elem.level": level._id }] }
-  );
-
-  // Notify players through Socket.io
-  io.to(player1.socketId).emit("matchFound", { roomCode, level });
-  io.to(player2.socketId).emit("matchFound", { roomCode, level });
-};
-
-// Function to find a matching player
-async function findMatchingPlayer(waitingPlayers, io) {
-  const startTime = Date.now(); // Track the start time
-
-  // Try to find a matching player within 2 minutes
-  while (waitingPlayers.length > 0) {
-    const player1 = waitingPlayers[0];
-
-    // Check if 2 minutes have passed
-    if (Date.now() - startTime > 2 * 60 * 1000) {
-      // No match found within the time limit
-      disconnectPlayer(player1, io, "You waited too long, no match found.");
-      return;
-    }
-
-    // Look for a player with the same level
-    const player2 = waitingPlayers.find(
-      (p) => p.level === player1.level && p.playerId !== player1.playerId
-    );
-
-    if (player2) {
-      // Found a match, create the game
-      waitingPlayers.splice(waitingPlayers.indexOf(player1), 1);
-      waitingPlayers.splice(waitingPlayers.indexOf(player2), 1);
-      await createMatch(io, player1, player2, waitingPlayers);
-      return;
-    }
-
-    // If no match is found, we continue to check for others in the queue
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before checking again
-  }
 }
 
 module.exports = { joinQueue, checkInactivePlayers, matchPlayers };
