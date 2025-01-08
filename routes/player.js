@@ -9,7 +9,9 @@ const {
   updatePlayers,
   resetpassword,
   forgotpassword,
-  googleAuth
+  googleAuth,
+  getWeeklyAnalysis,
+  getRecentActivity
 } = require("../controllers/playerControllers");
 const {
   creatlevel,
@@ -25,6 +27,8 @@ const {
   deleteGame,
   updateGames,
 } = require("../controllers/gameControllers");
+const { isAuthenticatedUser } = require("../middleware/auth");
+
 
 /* --------- player crud section ----------  */
 
@@ -47,6 +51,10 @@ router.delete("/", deletePlayer);
 
 //Update
 router.put("/", updatePlayers);
+
+router.post("/weeklyanalysis", isAuthenticatedUser, getWeeklyAnalysis);
+
+router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
 
 /* --------- level crud section ----------  */
 

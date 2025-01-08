@@ -1,13 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const homeControllers = require("../controllers/homeControllers.js");
-const { googleCallback, googleAuth } = require("../controllers/playerControllers.js");
+const {
+  googleCallback,
+  googleAuth,
+} = require("../controllers/playerControllers.js");
 
 router.get("/", homeControllers.home);
 
 // Google Callback Route
-router.post('/auth/google/callback', googleCallback);
-router.post('/auth/google', googleAuth);
+router.post("/auth/google/callback", googleCallback);
+router.post("/auth/google", googleAuth);
 
 // player
 router.use("/player", require("./player"));
@@ -17,5 +20,8 @@ router.use("/firstGame", require("./firstGame"));
 
 //secoundGame
 router.use("/secoundGame", require("./secoundGame"));
+
+//thirdGame
+router.use("/thirdGame", require("./thirdGame"));
 
 module.exports = router;

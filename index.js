@@ -14,8 +14,10 @@ const { Server } = require("socket.io"); // Importing socket.io
 const {
   joinQueue,
   checkInactivePlayers,
-  matchPlayers,
-} = require("./Configuration/socket"); // Make sure these functions are correctly exported in 'socket.js'
+} = require("./Configuration/firstsocket"); // Make sure these functions are correctly exported in 'socket.js'
+
+// Game Logic Imports
+const { eventFormeet } = require("./Configuration/thirdsocket");
 
 databaseConnection();
 // Configure session middleware
@@ -63,20 +65,26 @@ const io = new Server(server, {
 
 // In-memory player queue
 const waitingPlayers = [];
+
+const meetwaitingPlayers = [];
 // Handle socket connections and game logic
-io.on('connection', (socket) => {
+io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   // Join queue event
-  socket.on('joinQueue', ({ playerId, level }) => {
+  socket.on("joinQueue", ({ level, playerId }) => {
     console.log("playerId", playerId);
-
     joinQueue(socket, waitingPlayers, io, playerId, level);
   });
 
+  socket.on("eventFormeet", ({ playerId, role }) => {
+    eventFormeet(socket, meetwaitingPlayers, io, playerId, role);
+  });
   // Handle player disconnect
-  socket.on('disconnect', () => {
-    const index = waitingPlayers.findIndex((player) => player.playerId === socket.id);
+  socket.on("disconnectMessage", () => {
+    const index = waitingPlayers.findIndex(
+      (player) => player?.playerId === socket?.id
+    );
     if (index !== -1) {
       waitingPlayers.splice(index, 1);
     }

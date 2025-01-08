@@ -1,14 +1,24 @@
 const express = require("express");
 const router = express.Router();
+const { isAuthenticatedUser } = require("../middleware/auth");
 const {
-  creatQuestion,
-  getallQuestions,
-  getsingleQuestions,
-  updateQuestions,
-  deleteQuestion,
-} = require("../controllers/game_first/firstquestionControllers");
+  creatsingleQuestion,
+  getallsingleQuestions,
+  getsinglesingleQuestions,
+  updatesingleQuestions,
+  deletesingleQuestion,
+} = require("../controllers/game_first/singlequestionControllers");
+
 const {
-  getQuestionsForLevel,
+  creatmultipleQuestion,
+  getallmultipleQuestions,
+  getsinglemultipleQuestions,
+  updatemultipleQuestions,
+  deletemultipleQuestion,
+} = require("../controllers/game_first/multiplequestionControllers");
+
+const {
+  getQuestionsForsingleLevel,
   submitAnswer,
   creatgameSession,
   getallgameSessions,
@@ -16,21 +26,70 @@ const {
   deletegameSession,
   updategameSessions,
   getplayerResult,
+  getLevelAccess,
+  overallPerformance
+} = require("../controllers/game_first/singlegameSessionControllers");
+
+const {
   joinmultipleGame,
-  getLevelAccess
-} = require("../controllers/game_first/gameSessionControllers");
-const { isAuthenticatedUser } = require("../middleware/auth");
+  getQuestionsFormultipleLevel,
+  updateProgress,
+  submitMultiAnswer,
+  getmultiLevelAccess
+} = require("../controllers/game_first/multiplegameSessionControllers");
+
+/* --------- single player crud section --------- */
+
+/*  quetion crud section  */
+
+// add
+router.post("/single/question/create", creatsingleQuestion);
+
+//getAllsingleQuestions
+router.get("/single/question/all", getallsingleQuestions);
+
+// get single singleQuestions
+router.get("/single/question/single", getsinglesingleQuestions);
+
+//Delete
+router.delete("/single/question/", deletesingleQuestion);
+
+//Update
+router.put("/single/question/", updatesingleQuestions);
+
+/* --------- multiple player crud section ----------  */
+
+/*  quetion crud section  */
+
+// add
+router.post("/multiple/question/create", creatmultipleQuestion);
+
+//getAllmultipleQuestions
+router.get("/multiple/question/all", getallmultipleQuestions);
+
+// get single multipleQuestions
+router.get("/multiple/question/single", getsinglemultipleQuestions);
+
+//Delete
+router.delete("/multiple/question/", deletemultipleQuestion);
+
+//Update
+router.put("/multiple/question/", updatemultipleQuestions);
+
+router.post("/multiple/submitanswer", isAuthenticatedUser, submitMultiAnswer);
+
+
+// ---------------------------------------------------------------------------------------
 
 /* --------- firstgame crud section ----------  */
 
 // check player valid level
 router.post("/checkVaildlevel", isAuthenticatedUser, getLevelAccess);
+router.post("/checkmultiVaildlevel", isAuthenticatedUser, getmultiLevelAccess);
 
 //get Questions For Level
-router.post("/getQuestionsForLevel", isAuthenticatedUser, getQuestionsForLevel);
-
-//joinmultipleGame
-router.post("/joinmultipleGame", isAuthenticatedUser, joinmultipleGame);
+router.post("/single/getQuestionsForLevel", isAuthenticatedUser, getQuestionsForsingleLevel);
+router.post("/multiple/getQuestionsForLevel", isAuthenticatedUser, getQuestionsFormultipleLevel);
 
 // submit answer
 router.post("/submitanswer", isAuthenticatedUser, submitAnswer);
@@ -38,24 +97,11 @@ router.post("/submitanswer", isAuthenticatedUser, submitAnswer);
 //  get player result
 router.post("/getplayerResult", isAuthenticatedUser, getplayerResult);
 
+//  get player result
+router.get("/overallPerformance", isAuthenticatedUser, overallPerformance);
 
-
-/* --------- quetion crud section ----------  */
-
-// add
-router.post("/question/create", creatQuestion);
-
-//getAllQuestions
-router.get("/question/all", getallQuestions);
-
-// get single Questions
-router.get("/question/single", getsingleQuestions);
-
-//Delete
-router.delete("/question/", deleteQuestion);
-
-//Update
-router.put("/question/", updateQuestions);
+//  get player result
+router.post("/updateprogress", isAuthenticatedUser, updateProgress);
 
 /* --------- game crud section ----------  */
 
@@ -74,5 +120,8 @@ router.delete("/", deletegameSession);
 
 //Update
 router.put("/", updategameSessions);
+
+//joinmultipleGame
+router.post("/joinmultipleGame", isAuthenticatedUser, joinmultipleGame);
 
 module.exports = router;

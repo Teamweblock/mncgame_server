@@ -286,6 +286,10 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
         }
 
         await Qsession.save();
+
+        levelData = Qsession.levelScores.find(
+          (score) => score.level.toString() === getlevel._id.toString()
+        );
       }
       // Return formatted questions with question text
       const formattedQuestions = levelData?.questions.map((storedQuestion) => {
@@ -294,13 +298,6 @@ module.exports.getQuestionsForLevel = catchAsyncErrors(
           question._id.toString() === storedQuestion.questionId.toString()
         );
       }).filter(Boolean); // Remove any null values if no match is found
-
-      // const formattedQuestions = questions.map((question) => ({
-      //   questionId: question,
-      //   questionText: question.questionText,
-      //   answer: null,
-      //   score: 0,
-      // }));
 
       return res.status(200).json({
         formattedQuestions,
@@ -372,7 +369,8 @@ module.exports.submitAnswer = catchAsyncErrors(async (req, res, next) => {
           0
         );
 
-        const averageScore = totalScore / existingLevel?.questions?.length;
+        const averageScore = totalScore / existingLevel?.questions?.length * 10;
+
         existingLevel.score = averageScore;
 
         // Mark the level as completed if not already in completedLevels
@@ -402,14 +400,31 @@ module.exports.getplayerResult = catchAsyncErrors(async (req, res) => {
   const user = req.user;
   const playerId = user._id;
   const { level } = req.body;
-  try {
-    const getLevel = await Level.findOne({ levelNumber: level });
-    if (!getLevel) return res.status(404).json({ error: "Level not found" });
 
+  try {
+    // Find the player
     const player = await Gamesession.findOne({ playerId });
     if (!player) return res.status(404).json({ error: "Player not found" });
-    res.status(200).json(player);
+    const getLevel = await Level.findOne({ levelNumber: level });
+
+    // Filter the specific level score
+    const levelScore = player.levelScores.find(
+      (score) => score.level.toString() === getLevel?._id.toString()
+    );
+
+    if (!levelScore) {
+      return res.status(404).json({ error: "Level score not found" });
+    }
+
+    // Create a response with only the filtered level score
+    const response = {
+      ...player._doc, // Include other player properties
+      levelScores: [levelScore], // Only include the filtered level score
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch questions." });
+    console.error("Error fetching level score:", error);
+    res.status(500).json({ error: "Failed to fetch level score." });
   }
 });

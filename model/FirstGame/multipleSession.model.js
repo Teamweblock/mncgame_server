@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const secondgameSessionSchema = new mongoose.Schema(
+const multiplegameSessionSchema = new mongoose.Schema(
   {
     playerId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -10,18 +10,24 @@ const secondgameSessionSchema = new mongoose.Schema(
     completedLevels: [{ type: mongoose.Schema.Types.ObjectId, ref: "Level" }],
     currentLevel: {
       type: Number,
-      required: true,
       default: 1, // Player starts from level 1
     }, // Default starting at level 1
     levelScores: [
       {
+        gameType: {
+          type: String,
+          enum: ["single", "multiple"],
+          default: "single", // default to single player
+        },
         level: { type: mongoose.Schema.Types.ObjectId, ref: "Level" },
         score: { type: Number, default: 0 },
+        roomCode: { type: String },
+        isPaired: { type: Boolean, default: false }, // to indicate pairing status
         questions: [
           {
             questionId: {
               type: mongoose.Schema.Types.ObjectId,
-              ref: "Question",
+              ref: "FirstgameQuestion",
             },
             answer: { type: String },
             score: { type: Number, default: 0 },
@@ -35,9 +41,11 @@ const secondgameSessionSchema = new mongoose.Schema(
         ],
       },
     ],
-    // startTime: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("secondGameSession", secondgameSessionSchema);
+module.exports = mongoose.model(
+  "MultipleGameSession",
+  multiplegameSessionSchema
+);

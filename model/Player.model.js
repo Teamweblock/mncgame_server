@@ -26,10 +26,18 @@ const playerSchema = new mongoose.Schema(
       ],
       unique: true,
     },
+    mobileNumber: {
+      type: String,
+      // unique: true, // Ensure uniqueness
+      match: [/^\d{10}$/, "Please provide a valid 10-digit mobile number"], // Example regex for 10 digits
+    },
     password: {
       type: String,
       // required: [true, "Please provide a password"],
       // minlength: [6, "Password cannot be less than 6 characters"],
+    },
+    avatar: {
+      type: String,
     },
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
@@ -40,6 +48,22 @@ const playerSchema = new mongoose.Schema(
       default: "inactive", // default to inactive player
     },
 
+    address: { type: String },
+    educationDetails: {
+      currentJob: { type: String },
+      companyName: { type: String },
+      linkedInProfile: { type: String },
+      skills_expertise: [String], // add options to select from dropdown
+      address: { type: String },
+    },
+    professionalDetails: {
+      currentJob: { type: String },
+      companyName: { type: String },
+      jobRole: { type: String },
+      linkedInProfile: { type: String },
+      skills: [String], // add options to select from dropdown
+      expertise: [String], // add options to select from dropdown
+    },
   },
   { timestamps: true }
 );
@@ -60,7 +84,10 @@ playerSchema.methods.getResetPasswordToken = async function () {
   const resetToken = crypto.randomBytes(20).toString("hex");
 
   // Hash the token and save it to the user document
-  this.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
   this.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 minutes expiration
 
   await this.save({ validateBeforeSave: false });

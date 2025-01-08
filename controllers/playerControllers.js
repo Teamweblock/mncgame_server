@@ -1,12 +1,18 @@
 const Player = require("../model/Player.model");
 const jwt = require("jsonwebtoken");
 const passport = require('passport');
+const crypto = require("crypto");
 const ErrorHander = require("../utils/errorhandaler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const { JWT_ACCESS_SECRET, JWT_ACCESS_TIME } = require("../config");
 const { sendResetPasswordEmail } = require("../Configuration/emailService");
 const { oauth2Client } = require('../Configuration/passport');
-const crypto = require("crypto");
+const { getWeeklyAnalysis } = require("../Configuration/comman");
+// Import game models
+const MultipleGameSession = require("../model/FirstGame/multipleSession.model");
+const SingleGameSession = require("../model/FirstGame/singleSession.model");
+const SecondGameSession = require("../model/SecondGame/secondgameSession.model");
+const MeetGameGameSession = require("../model/thirdGame/meetSession.model");
 
 // Register API (create Players)
 module.exports.registerPlayer = catchAsyncErrors(async (req, res, next) => {
@@ -38,7 +44,6 @@ module.exports.registerPlayer = catchAsyncErrors(async (req, res, next) => {
 // Login API
 module.exports.loginPlayer = catchAsyncErrors(async (req, res, next) => {
   const { email, password } = req.body;
-
   try {
     const player = await Player.findOne({ email });
 
@@ -106,7 +111,7 @@ module.exports.googleLogin = catchAsyncErrors(async (req, res, next) => {
       });
       await player.save();
     }
-    
+
     // Create JWT token for the player
     const token = jwt.sign({ playerId: player._id }, JWT_ACCESS_SECRET, {
       expiresIn: JWT_ACCESS_TIME,
@@ -184,7 +189,6 @@ module.exports.googleCallback = catchAsyncErrors(async (req, res, next) => {
   })(req, res, next); // Pass req, res, and next for middleware chaining
 });
 
-
 //get all Players
 module.exports.getallPlayers = catchAsyncErrors(async (req, res) => {
   try {
@@ -232,35 +236,61 @@ module.exports.deletePlayer = catchAsyncErrors(async (req, res, next) => {
 // Update Player
 module.exports.updatePlayers = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
-  const { firstName, lastName, email, score } = req.body;
-  let Players = await Player.findById(id);
 
-  if (!Players) {
-    return next(new ErrorHander("Cannot found Players..", 404));
+  const { firstName, lastName, email, mobileNumber, educationDetails, professionalDetails } = req.body;
+
+  // Find the player
+  const player = await Player.findById(id);
+
+  if (!player) {
+    return next(new ErrorHander("Cannot find Player.", 404));
   }
+
   try {
-    const updatedPlayer = await Player.findByIdAndUpdate(
-      id,
-      {
-        firstName,
-        lastName,
-        email,
-        score,
-      },
-      { new: true }
-    );
+    // Update player fields dynamically
+    const updateFields = {};
+    if (firstName) updateFields.firstName = firstName;
+    if (lastName) updateFields.lastName = lastName;
+    if (email) updateFields.email = email;
+    if (mobileNumber) updateFields.mobileNumber = mobileNumber;
+
+    // Handle nested objects for educationDetails and professionalDetails
+    if (educationDetails) {
+      updateFields.educationDetails = {
+        ...player.educationDetails.toObject(), // Preserve existing data
+        ...educationDetails, // Update with new data
+      };
+    }
+
+    if (professionalDetails) {
+      updateFields.professionalDetails = {
+        ...player.professionalDetails.toObject(), // Preserve existing data
+        ...professionalDetails, // Update with new data
+      };
+    }
+
+    // Find and update player
+    const updatedPlayer = await Player.findByIdAndUpdate(id, updateFields, {
+      new: true,
+      runValidators: true, // Ensure schema validation
+    });
 
     if (!updatedPlayer) {
       return res.status(404).json({ message: "Player not found" });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      msg: "Updated successfully...",
+      msg: "Updated successfully.",
       updatedPlayer,
     });
   } catch (error) {
-    res.status(500).json({ error: "Failed to update Player" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update Player",
+      error: error.message,
+    });
   }
 });
 
@@ -289,6 +319,7 @@ module.exports.forgotpassword = catchAsyncErrors(async (req, res) => {
   });
 });
 
+// resetpassword
 module.exports.resetpassword = catchAsyncErrors(async (req, res) => {
   const { newPassword, confirmPassword, clientToken } = req.body;
 
@@ -339,4 +370,112 @@ module.exports.resetpassword = catchAsyncErrors(async (req, res) => {
     token,
     msg: "Password changed successfully",
   });
+});
+
+// updatepassword
+module.exports.updatepassword = catchAsyncErrors(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+  try {
+    const user = await Player.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Use the matchPassword method
+    const isMatch = await Player.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update the password in the database
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+module.exports.getWeeklyAnalysis = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+  const { startDate, endDate } = req.body;
+
+  if (!playerId || !startDate || !endDate) {
+    return res.status(400).json({ message: "Missing required parameters" });
+  }
+
+  try {
+    const report = await getWeeklyAnalysis(
+      playerId,
+      new Date(startDate),
+      new Date(endDate)
+    );
+    res.status(200).json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get Recent Activity
+module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+
+  try {
+    // Fetch activities from all game session collections
+    const singleGameSessions = await SingleGameSession.find({ playerId })
+      .select("createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5); // Adjust limit as needed
+
+    const multipleGameSession = await MultipleGameSession.find({ playerId })
+      .select("createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    const secondGameSessions = await SecondGameSession.find({ playerId })
+      .select("createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    const meetGameGameSessions = await MeetGameGameSession.find({ playerId })
+      .select("createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    // Combine all activities
+    const allActivities = [
+      ...singleGameSessions.map((session) => ({
+        type: "SingleGameSession",
+        timestamp: session.createdAt,
+      })),
+      ...multipleGameSession.map((session) => ({
+        type: "MultipleGameSession",
+        timestamp: session.createdAt,
+      })),
+      ...secondGameSessions.map((session) => ({
+        type: "SecondGameSession",
+        timestamp: session.createdAt,
+      })),
+      ...meetGameGameSessions.map((session) => ({
+        type: "MeetGameGameSession",
+        timestamp: session.createdAt,
+      })),
+    ];
+
+    // Sort activities by timestamp (most recent first)
+    const sortedActivities = allActivities.sort(
+      (a, b) => b.timestamp - a.timestamp
+    );
+
+    res.status(200).json(sortedActivities);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch recent activity" });
+  }
 });
