@@ -14,10 +14,11 @@ const { Server } = require("socket.io"); // Importing socket.io
 const {
   joinQueue,
   checkInactivePlayers,
+  handleLeaveQueue,
 } = require("./Configuration/firstsocket"); // Make sure these functions are correctly exported in 'socket.js'
 
 // Game Logic Imports
-const { eventFormeet } = require("./Configuration/thirdsocket");
+const { eventFormeet, handleLeaveMeetQueue } = require("./Configuration/thirdsocket");
 
 databaseConnection();
 // Configure session middleware
@@ -59,6 +60,7 @@ const server = app.listen(PORT, () => {
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3000", // React Client URL
+    // origin: "https://www.multinetworkingcompany.com", // React Client URL
     methods: ["GET", "POST"],
   },
 });
@@ -70,7 +72,11 @@ const meetwaitingPlayers = [];
 // Handle socket connections and game logic
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
+  // Handle leaveQueue for the general waiting queue
+  handleLeaveQueue(socket, waitingPlayers, io);
 
+  // Handle leaveQueue for the matchmaking queue
+  handleLeaveMeetQueue(socket, meetwaitingPlayers, io);
   // Join queue event
   socket.on("joinQueue", ({ level, playerId }) => {
     console.log("playerId", playerId);

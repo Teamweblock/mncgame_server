@@ -1,7 +1,6 @@
 const Player = require("../model/Player.model");
 const { getFirstGameQuestions } = require("./comman");
 
-
 async function joinQueue(socket, levelGroups, io, playerId, level) {
   const playerData = {
     socketId: socket.id,
@@ -38,6 +37,11 @@ async function joinQueue(socket, levelGroups, io, playerId, level) {
     return;
   }
 
+  if (levelGroups[level]?.length >= 3) {
+    socket.emit("errorMessage", "The queue for this level is full.");
+    return;
+  }
+
   levelGroups[level].push(playerData);
   updatePlayersStatus(io, levelGroups[level]);
   matchPlayers(levelGroups[level], io, level);
@@ -53,7 +57,6 @@ async function joinQueue(socket, levelGroups, io, playerId, level) {
 }
 
 async function updatePlayersStatus(io, players) {
-  // Fetch additional information for all players
   const playerDetails = await Promise.all(
     players.map(async (p) => {
       const playerInfo = await Player.findById(p.playerId);
@@ -67,7 +70,6 @@ async function updatePlayersStatus(io, players) {
     })
   );
 
-  // Emit the updated player details
   io.emit("playersStatus", playerDetails);
 }
 
@@ -134,7 +136,6 @@ async function createMatch(io, player1, player2, player3, waitingPlayers) {
 }
 
 async function startQuestionTimer(io, roomCode, questions, players) {
-
   if (!questions?.[0]?.questions || questions[0].questions.length === 0) {
     console.error("No questions available to send.");
     return;
@@ -142,7 +143,7 @@ async function startQuestionTimer(io, roomCode, questions, players) {
 
   const que = questions[0].questions;
   let currentQuestionIndex = 0;
-  const questionDuration = 3 * 60 * 1000; // 3 minutes per question
+  const questionDuration = 3 * 60 * 1000;
   let questionTimer = null;
   let questionStartTime = Date.now();
 
@@ -157,8 +158,6 @@ async function startQuestionTimer(io, roomCode, questions, players) {
 
   function sendNextQuestion() {
     if (currentQuestionIndex >= que.length) {
-      console.log("checking -----------------");
-
       clearInterval(questionTimer);
       io.to(roomCode).emit("gameOver", { message: "Game completed!" });
       return;
@@ -167,7 +166,6 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     const question = que[currentQuestionIndex];
     console.log(`Sending question ${currentQuestionIndex + 1}/${que.length}:`, question);
 
-    // Reset player states for the new question
     Object.keys(playerStates).forEach((playerId) => {
       playerStates[playerId].answered = false;
       playerStates[playerId].answer = null;
@@ -175,37 +173,33 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     });
 
     questionStartTime = Date.now();
-    // Ensure all players join the room
-
     players.forEach((player) => {
       const playerSocket = io.sockets.sockets.get(player.socketId);
       if (playerSocket) {
-        playerSocket.emit("joinRoom", { roomCode }); // Emit the event to the player's socket
+        playerSocket.emit("joinRoom", { roomCode });
       } else {
         console.error(`Socket not found for player: ${player.playerId}`);
       }
     });
 
-
     io.to(roomCode).emit("newQuestion", {
       question,
-      remainingTime: questionDuration / 1000
+      remainingTime: questionDuration / 1000,
     });
     broadcastPlayerStates();
     currentQuestionIndex++;
   }
 
   function broadcastPlayerStates() {
-
-    const currentQuestion = que[currentQuestionIndex] || {}; // Get the current question
+    const currentQuestion = que[currentQuestionIndex] || {};
     const playerDetails = players.map((player) => ({
       playerId: player.playerId,
       name: player.name,
       avatar: player.avatar,
       answered: playerStates[player.playerId].answered,
       timeLeft: playerStates[player.playerId].timeLeft,
-      currentQuestionId: currentQuestion.questionId || null, // Include the question ID
-      currentQuestionContent: currentQuestion.question || null, // Include the question content
+      currentQuestionId: currentQuestion.questionId || null,
+      currentQuestionContent: currentQuestion.question || null,
     }));
 
     io.to(roomCode).emit("playerStates", playerDetails);
@@ -243,7 +237,6 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     const elapsedTime = Date.now() - questionStartTime;
     const remainingTime = Math.max(0, questionDuration - elapsedTime);
 
-    // Update player time left
     Object.keys(playerStates).forEach((playerId) => {
       if (!playerStates[playerId].answered) {
         playerStates[playerId].timeLeft = Math.ceil(remainingTime / 1000);
@@ -272,7 +265,6 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     }
   });
 }
-
 
 function handleLeaveQueue(socket, levelGroups) {
   socket.on("leaveQueue", ({ playerId }) => {
@@ -333,12 +325,9 @@ async function checkInactivePlayers(waitingPlayers, io) {
   });
 }
 
-
-
 module.exports = {
   joinQueue,
   checkInactivePlayers,
   matchPlayers,
-  handleLeaveQueue, // Add the function here
+  handleLeaveQueue,
 };
-
