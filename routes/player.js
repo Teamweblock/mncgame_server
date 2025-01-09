@@ -10,6 +10,7 @@ const {
   resetpassword,
   forgotpassword,
   googleAuth,
+  getPlayer,
   getWeeklyAnalysis,
   getRecentActivity
 } = require("../controllers/playerControllers");
@@ -36,6 +37,7 @@ const { isAuthenticatedUser } = require("../middleware/auth");
 router.post("/register", registerPlayer);
 router.post("/login", loginPlayer);
 router.post("/auth/google", googleAuth);
+router.get("/profile", isAuthenticatedUser, getPlayer);
 
 router.post("/forgotpassword", forgotpassword);
 router.post("/resetpassword", resetpassword);

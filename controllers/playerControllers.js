@@ -219,6 +219,21 @@ module.exports.getsinglePlayers = catchAsyncErrors(async (req, res, next) => {
   }
 });
 
+module.exports.getPlayer = catchAsyncErrors(async (req, res, next) => {
+  const user = req.user;
+  const playerId = user._id;
+  const userData = await Player.findById(playerId);
+
+  if (!userData) {
+    return next(new ErrorHander("userData not found", 404));
+  } else {
+    res.status(200).json({
+      success: true,
+      userData,
+    });
+  }
+});
+
 //Delete Player
 module.exports.deletePlayer = catchAsyncErrors(async (req, res, next) => {
   let id = req.query.id;
