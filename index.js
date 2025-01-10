@@ -59,8 +59,7 @@ const server = app.listen(PORT, () => {
 // Set up Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", // React Client URL
-    // origin: "https://www.multinetworkingcompany.com", // React Client URL
+    origin: process.env.FRONTEND_URL, // React Client URL
     methods: ["GET", "POST"],
   },
 });
