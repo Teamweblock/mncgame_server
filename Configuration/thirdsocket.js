@@ -1,5 +1,7 @@
 const Player = require("../model/Player.model");
 const { getThirdGameQuestions } = require("./comman");
+const thirdQuestion = require("../model/thirdGame/meetQuestion.model");
+
 
 // Function to add a player to the queue and attempt matchmaking
 async function eventFormeet(socket, MeetGroups, io, playerId, role) {
@@ -55,6 +57,29 @@ async function eventFormeet(socket, MeetGroups, io, playerId, role) {
       socket.disconnect();
     }
   }, 2 * 60 * 1000);
+}
+
+async function updatePlayersStatus(io, players) {
+  console.log(players, "players");
+
+  // Fetch additional information for all players
+  const playerDetails = await Promise.all(
+    players.map(async (p) => {
+      const playerInfo = await Player.findById(p.playerId);
+      return {
+        id: p?.playerId,
+        status: "ready",
+        role: p?.role,
+        firstName: playerInfo?.firstName || "Unknown",
+        lastName: playerInfo?.lastName || "Unknown",
+        avatar: playerInfo?.avatar || null,
+      };
+    })
+  );
+  console.log(playerDetails, "playerDetails");
+
+  // Emit the updated player details
+  io.emit("playersStatus", playerDetails);
 }
 
 // Function to match players and handle pairing different roles
@@ -136,8 +161,9 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
           id: player?.playerId,
           status: "ready",
           role: player?.role,
-          name: playerInfo?.firstName || "Unknown",
-          avatar: playerInfo?.avatar || "default-avatar.png",
+          firstName: playerInfo?.firstName || "Unknown",
+          lastName: playerInfo?.lastName || "Unknown",
+          avatar: playerInfo?.avatar || null,
         };
       })
     );
@@ -145,6 +171,15 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
 
     // Notify players to start the game
     io.to(roomCode).emit("startGame", { roomCode });
+    // Prepare players for the startQuestionTimer
+    const playersWithDetails = matchedPlayers.map((player, index) => ({
+      ...player,
+      firstName: playerDetails[index]?.firstName || "Unknown",
+      lastName: playerDetails[index]?.lastname || "Unknown",
+      avatar: playerDetails[index]?.avatar || null,
+    }));
+    // Start the question timer with player details
+    startQuestionmeet(io, roomCode, questions, playersWithDetails);
 
     // Setup disconnection listeners
     sockets.forEach((socket, index) => {
@@ -162,49 +197,42 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
   }
 }
 
-async function updatePlayersStatus(io, players) {
-  console.log(players, "players");
+async function startQuestionmeet(io, roomCode, questions, players) {
+  console.log("Starting question timer for room:", roomCode);
 
-  // Fetch additional information for all players
-  const playerDetails = await Promise.all(
-    players.map(async (p) => {
-      const playerInfo = await Player.findById(p.playerId);
-      return {
-        id: p?.playerId,
-        status: "ready",
-        role: p?.role,
-        name: playerInfo?.firstName || "Unknown",
-        avatar: playerInfo?.avatar || "default-avatar.png",
-      };
-    })
-  );
-  console.log(playerDetails, "playerDetails");
+  // Check if the question is available
+  if (!questions?.[0]?.questionId || questions[0].questionId.length === 0) {
+    console.error("No questions available to send.");
+    return;
+  }
 
-  // Emit the updated player details
-  io.emit("playersStatus", playerDetails);
-}
-// Function to handle leaveQueue event
-function handleLeaveMeetQueue(socket, MeetGroups, io) {
-  socket.on("leaveQueue", ({ playerId }) => {
-    console.log(`Player ${playerId} is leaving the queue.`);
+  const que = questions[0].questionId;
 
-    // Find and remove the player from the MeetGroups
-    const playerIndex = MeetGroups.findIndex((p) => p.playerId === playerId);
-    if (playerIndex !== -1) {
-      const removedPlayer = MeetGroups.splice(playerIndex, 1)[0];
-      console.log(`Removed player:`, removedPlayer);
+  try {
+    // Fetch the question from the database
+    const question = await thirdQuestion.findById(que);
 
-      // Notify the player about successful removal
-      socket.emit("disconnectMessage", "You have left the queue.");
+    if (question) {
+      console.log("Question:", question);
+      // Emit the question to the room and players data
+      const socketsInRoom = await io.in(roomCode).allSockets();
+      console.log("Sockets in room:", socketsInRoom);
 
-      // Optionally notify other players about the updated queue
-      updatePlayersStatus(io, MeetGroups);
+      io.to(roomCode).emit("newQuestion", {
+        question,
+        players
+      });
+
     } else {
-      console.log(`Player ${playerId} not found in the queue.`);
-      socket.emit("errorMessage", "You are not currently in the queue.");
+      console.error("Question not found.");
     }
-  });
+  } catch (error) {
+    console.error("Error fetching question:", error);
+  }
+
+  console.log("Players:", players);
 }
+
 
 // Function to handle when a player exits or disconnects
 async function handlePlayerExit(
@@ -230,6 +258,26 @@ async function handlePlayerExit(
       remainingSocket.leave(disconnectedPlayer.roomCode);
     }
   }
+}
+
+// Function to handle leaveQueue event
+function handleLeaveMeetQueue(socket, MeetGroups, io) {
+  socket.on("leavemeetQueue", ({ playerId }) => {
+    console.log(`Player ${playerId} is leaving the queue.`);
+    // Find and remove the player from the MeetGroups
+    const playerIndex = MeetGroups.findIndex((p) => p.playerId === playerId);
+    if (playerIndex !== -1) {
+      const removedPlayer = MeetGroups.splice(playerIndex, 1)[0];
+      console.log(`Removed player:`, removedPlayer);
+      // Notify the player about successful removal
+      socket.emit("disconnectMessage", "You have left the queue.");
+      // Optionally notify other players about the updated queue
+      updatePlayersStatus(io, MeetGroups);
+    } else {
+      console.log(`Player ${playerId} not found in the queue.`);
+      socket.emit("errorMessage", "You are not currently in the queue.");
+    }
+  });
 }
 
 // Export named functions and default handler explicitly

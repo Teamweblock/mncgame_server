@@ -494,3 +494,113 @@ module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
     res.status(500).json({ error: "Failed to fetch recent activity" });
   }
 });
+
+module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+  try {
+    // Fetch data for the first game for a specific player
+    const firstGameData = await SingleGameSession.aggregate([
+      { $match: { playerId: playerId } }, // Filter by playerId
+      { $unwind: "$levelScores" },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          averageScore: { $avg: "$levelScores.score" },
+        },
+      },
+      { $sort: { "_id": 1 } },
+    ]);
+
+    // Fetch data for the second game for a specific player
+    const secondGameData = await SecondGameSession.aggregate([
+      { $match: { playerId: playerId } }, // Filter by playerId
+      { $unwind: "$levelScores" },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          averageScore: { $avg: "$levelScores.score" },
+        },
+      },
+      { $sort: { "_id": 1 } },
+    ]);
+
+    // Fetch data for the third game for a specific player
+    const thirdGameData = await MeetGameGameSession.aggregate([
+      { $match: { playerId: playerId } }, // Filter by playerId
+      { $unwind: "$levelScores" },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          averageScore: { $avg: "$levelScores.score" },
+        },
+      },
+      { $sort: { "_id": 1 } },
+    ]);
+
+    // Get unique months from all data
+    const allMonths = [
+      ...new Set([
+        ...firstGameData.map((item) => item._id),
+        ...secondGameData.map((item) => item._id),
+        ...thirdGameData.map((item) => item._id),
+      ]),
+    ].sort();
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    // Convert month numbers to names
+    const labels = allMonths.map((month) => monthNames[month - 1]);
+
+    // Prepare datasets
+    const prepareData = (data) => {
+      const dataMap = data.reduce((acc, item) => {
+        acc[item._id] = item.averageScore;
+        return acc;
+      }, {});
+
+      return allMonths.map((month) => dataMap[month] || 0); // Fill missing months with 0
+    };
+
+    const response = {
+      labels,
+      datasets: [
+        {
+          label: "Problem Pilot",
+          data: prepareData(firstGameData),
+          borderColor: "blue",
+          fill: false,
+        },
+        {
+          label: "Entrepreneurial Edge",
+          data: prepareData(secondGameData),
+          borderColor: "cyan",
+          fill: false,
+        },
+        {
+          label: "Strategy Trial",
+          data: prepareData(thirdGameData),
+          borderColor: "orange",
+          fill: false,
+        },
+      ],
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching user skill overview data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+

@@ -64,7 +64,7 @@ async function updatePlayersStatus(io, players) {
         id: p?.playerId,
         status: "READY",
         firstName: playerInfo?.firstName || "Unknown",
-        Lastname: playerInfo?.lastName || "Unknown",
+        lastName: playerInfo?.lastName || "Unknown",
         avatar: playerInfo?.avatar || null,
         level: p?.level,
       };
@@ -105,7 +105,7 @@ async function createMatch(io, player1, player2, player3, waitingPlayers) {
           id: player?.playerId,
           status: "READY",
           firstName: playerInfo?.firstName || "Unknown",
-          LastName: playerInfo?.lastName || "Unknown",
+          lastName: playerInfo?.lastName || "Unknown",
           avatar: playerInfo?.avatar || null,
           level: player?.level,
         };
@@ -117,9 +117,9 @@ async function createMatch(io, player1, player2, player3, waitingPlayers) {
     [player1, player2, player3].forEach((player) => (player.status = "READY"));
 
     startQuestionTimer(io, roomCode, questions, [
-      { ...player1, firstName: playerDetails[0].firstName, Lastname: playerDetails[0].LastName, avatar: playerDetails[0].avatar },
-      { ...player2, firstName: playerDetails[1].firstName, Lastname: playerDetails[0].LastName, avatar: playerDetails[1].avatar },
-      { ...player3, firstName: playerDetails[2].firstName, Lastname: playerDetails[0].LastName, avatar: playerDetails[2].avatar },
+      { ...player1, firstName: playerDetails[0].firstName, lastName: playerDetails[0].lastName, avatar: playerDetails[0].avatar },
+      { ...player2, firstName: playerDetails[1].firstName, lastName: playerDetails[0].lastName, avatar: playerDetails[1].avatar },
+      { ...player3, firstName: playerDetails[2].firstName, lastName: playerDetails[0].lastName, avatar: playerDetails[2].avatar },
     ]);
 
     sockets.forEach((socket, index) => {
@@ -197,7 +197,7 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     const playerDetails = players.map((player) => ({
       playerId: player.playerId,
       firstName: player.firstName,
-      Lastname: player.lastname,
+      lastName: player.lastname,
       avatar: player.avatar,
       answered: playerStates[player.playerId].answered,
       timeLeft: playerStates[player.playerId].timeLeft,
@@ -216,7 +216,7 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     const results = players.map((player) => ({
       playerId: player.playerId,
       firstName: player.firstName,
-      Lastname: player.lastname,
+      lastName: player.lastname,
       answer: playerStates[player.playerId].answer,
       answered: playerStates[player.playerId].answered,
     }));

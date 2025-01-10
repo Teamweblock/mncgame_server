@@ -12,7 +12,8 @@ const {
   googleAuth,
   getPlayer,
   getWeeklyAnalysis,
-  getRecentActivity
+  getRecentActivity,
+  skillsOverview
 } = require("../controllers/playerControllers");
 const {
   creatlevel,
@@ -57,6 +58,10 @@ router.put("/", updatePlayers);
 router.post("/weeklyanalysis", isAuthenticatedUser, getWeeklyAnalysis);
 
 router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
+
+router.post("/userskillsoverview", isAuthenticatedUser, skillsOverview);
+
+
 
 /* --------- level crud section ----------  */
 
