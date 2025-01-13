@@ -7,7 +7,7 @@ const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const { JWT_ACCESS_SECRET, JWT_ACCESS_TIME } = require("../config");
 const { sendResetPasswordEmail } = require("../Configuration/emailService");
 const { oauth2Client } = require('../Configuration/passport');
-const { getWeeklyAnalysis } = require("../Configuration/comman");
+const { getWeeklyAnalysis, fetchGameData, validateDates } = require("../Configuration/comman");
 // Import game models
 const MultipleGameSession = require("../model/FirstGame/multipleSession.model");
 const SingleGameSession = require("../model/FirstGame/singleSession.model");
@@ -418,23 +418,61 @@ module.exports.updatepassword = catchAsyncErrors(async (req, res) => {
 module.exports.getWeeklyAnalysis = catchAsyncErrors(async (req, res) => {
   const user = req.user;
   const playerId = user._id;
-  const { startDate, endDate } = req.body;
+  let { startDate, endDate } = req.body;
 
-  if (!playerId || !startDate || !endDate) {
+  if (!playerId) {
     return res.status(400).json({ message: "Missing required parameters" });
   }
 
   try {
-    const report = await getWeeklyAnalysis(
-      playerId,
-      new Date(startDate),
-      new Date(endDate)
-    );
-    res.status(200).json(report);
+    // // Calculate the start and end dates for the current week if not provided
+    // if (!startDate || !endDate) {
+    //   const currentDate = new Date();
+    //   const dayOfWeek = currentDate.getDay(); // 0 (Sunday) to 6 (Saturday)
+    //   const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek; // Calculate difference to Monday
+    //   const monday = new Date(currentDate);
+    //   monday.setDate(currentDate.getDate() + diffToMonday); // Set to the current week's Monday
+    //   monday.setHours(0, 0, 0, 0); // Set to start of the day
+
+    //   const sunday = new Date(monday);
+    //   sunday.setDate(monday.getDate() + 6); // Set to the current week's Sunday
+    //   sunday.setHours(23, 59, 59, 999); // Set to end of the day
+
+    //   startDate = monday;
+    //   endDate = sunday;
+    // } else {
+    //   startDate = new Date(startDate);
+    //   endDate = new Date(endDate);
+    // }
+    
+    // Calculate the last 7 days (including today) if dates are not provided
+    if (!startDate || !endDate) {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of today
+
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 6); // Start of 7 days ago
+      sevenDaysAgo.setHours(0, 0, 0, 0); // Start of the day
+
+      startDate = sevenDaysAgo;
+      endDate = today;
+    } else {
+      startDate = new Date(startDate);
+      endDate = new Date(endDate);
+    }
+
+    // Validate the dates
+    validateDates(startDate, endDate);
+
+    // Fetch the report
+    const report = await getWeeklyAnalysis(playerId, startDate, endDate);
+
+    return res.status(200).json(report);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 // Get Recent Activity
 module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
@@ -444,42 +482,42 @@ module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
   try {
     // Fetch activities from all game session collections
     const singleGameSessions = await SingleGameSession.find({ playerId })
-      .select("createdAt")
-      .sort({ createdAt: -1 })
+      .select("updatedAt")
+      .sort({ updatedAt: -1 })
       .limit(5); // Adjust limit as needed
 
     const multipleGameSession = await MultipleGameSession.find({ playerId })
-      .select("createdAt")
-      .sort({ createdAt: -1 })
+      .select("updatedAt")
+      .sort({ updatedAt: -1 })
       .limit(5);
 
     const secondGameSessions = await SecondGameSession.find({ playerId })
-      .select("createdAt")
-      .sort({ createdAt: -1 })
+      .select("updatedAt")
+      .sort({ updatedAt: -1 })
       .limit(5);
 
     const meetGameGameSessions = await MeetGameGameSession.find({ playerId })
-      .select("createdAt")
-      .sort({ createdAt: -1 })
+      .select("updatedAt")
+      .sort({ updatedAt: -1 })
       .limit(5);
 
     // Combine all activities
     const allActivities = [
       ...singleGameSessions.map((session) => ({
         type: "SingleGameSession",
-        timestamp: session.createdAt,
+        timestamp: session.updatedAt,
       })),
       ...multipleGameSession.map((session) => ({
         type: "MultipleGameSession",
-        timestamp: session.createdAt,
+        timestamp: session.updatedAt,
       })),
       ...secondGameSessions.map((session) => ({
         type: "SecondGameSession",
-        timestamp: session.createdAt,
+        timestamp: session.updatedAt,
       })),
       ...meetGameGameSessions.map((session) => ({
         type: "MeetGameGameSession",
-        timestamp: session.createdAt,
+        timestamp: session.updatedAt,
       })),
     ];
 
@@ -488,7 +526,7 @@ module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
       (a, b) => b.timestamp - a.timestamp
     );
 
-    res.status(200).json(sortedActivities);
+    return res.status(200).json(sortedActivities);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch recent activity" });
@@ -498,54 +536,36 @@ module.exports.getRecentActivity = catchAsyncErrors(async (req, res) => {
 module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
   const user = req.user;
   const playerId = user._id;
+
   try {
-    // Fetch data for the first game for a specific player
-    const firstGameData = await SingleGameSession.aggregate([
-      { $match: { playerId: playerId } }, // Filter by playerId
-      { $unwind: "$levelScores" },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          averageScore: { $avg: "$levelScores.score" },
+    // Function to fetch and prepare data for a game
+    const fetchGameData = async (Model) => {
+      const data = await Model.aggregate([
+        { $match: { playerId: playerId } }, // Filter by playerId
+        { $unwind: "$levelScores" },
+        {
+          $group: {
+            _id: { $month: "$updatedAt" },
+            averageScore: { $avg: "$levelScores.score" },
+          },
         },
-      },
-      { $sort: { "_id": 1 } },
-    ]);
+        { $sort: { "_id": 1 } },
+      ]);
 
-    // Fetch data for the second game for a specific player
-    const secondGameData = await SecondGameSession.aggregate([
-      { $match: { playerId: playerId } }, // Filter by playerId
-      { $unwind: "$levelScores" },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          averageScore: { $avg: "$levelScores.score" },
-        },
-      },
-      { $sort: { "_id": 1 } },
-    ]);
+      // Convert data to a map for easier access
+      return data.reduce((acc, item) => {
+        acc[item._id] = item.averageScore;
+        return acc;
+      }, {});
+    };
 
-    // Fetch data for the third game for a specific player
-    const thirdGameData = await MeetGameGameSession.aggregate([
-      { $match: { playerId: playerId } }, // Filter by playerId
-      { $unwind: "$levelScores" },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          averageScore: { $avg: "$levelScores.score" },
-        },
-      },
-      { $sort: { "_id": 1 } },
-    ]);
+    // Fetch data for all games
+    const firstGameData = await fetchGameData(SingleGameSession);
+    const secondGameData = await fetchGameData(SecondGameSession);
+    const thirdGameData = await fetchGameData(MeetGameGameSession);
 
-    // Get unique months from all data
-    const allMonths = [
-      ...new Set([
-        ...firstGameData.map((item) => item._id),
-        ...secondGameData.map((item) => item._id),
-        ...thirdGameData.map((item) => item._id),
-      ]),
-    ].sort();
+    // Define all months (1-12)
+    const allMonths = Array.from({ length: 12 }, (_, i) => i + 1);
     const monthNames = [
       "January",
       "February",
@@ -560,21 +580,13 @@ module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
       "November",
       "December",
     ];
-    // Convert month numbers to names
-    const labels = allMonths.map((month) => monthNames[month - 1]);
 
-    // Prepare datasets
-    const prepareData = (data) => {
-      const dataMap = data.reduce((acc, item) => {
-        acc[item._id] = item.averageScore;
-        return acc;
-      }, {});
-
-      return allMonths.map((month) => dataMap[month] || 0); // Fill missing months with 0
-    };
+    // Prepare data for all months
+    const prepareData = (dataMap) =>
+      allMonths.map((month) => dataMap[month] || 0);
 
     const response = {
-      labels,
+      labels: monthNames, // All month names
       datasets: [
         {
           label: "Problem Pilot",
@@ -597,10 +609,113 @@ module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
       ],
     };
 
-    res.json(response);
+    return res.json(response);
   } catch (error) {
     console.error("Error fetching user skill overview data:", error);
     res.status(500).json({ message: "Server Error" });
   }
 });
 
+
+module.exports.problemPilotOverview = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+  // Extract body parameters
+  const timeRange = req.body.range || "monthly"; // Default to monthly
+  const startDate = req.body.startDate; // Expected format: YYYY-MM-DD
+  const endDate = req.body.endDate; // Expected format: YYYY-MM-DD
+
+
+  try {
+    // Validate dates
+    validateDates(startDate, endDate);
+    const gameData = await fetchGameData(SingleGameSession, playerId, timeRange, startDate, endDate);
+
+    const labels = gameData.map((item) => item._id);
+    const data = gameData.map((item) => item.averageScore);
+
+    const response = {
+      labels,
+      datasets: [
+        {
+          label: "Problem Pilot",
+          data,
+          fill: false,
+        },
+      ],
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error("Error fetching Problem Pilot data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+module.exports.entrepreneurialEdgeOverview = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+  // Extract body parameters
+  const timeRange = req.body.range || "monthly"; // Default to monthly
+  const startDate = req.body.startDate; // Expected format: YYYY-MM-DD
+  const endDate = req.body.endDate; // Expected format: YYYY-MM-DD
+
+  try {
+    // Validate dates
+    validateDates(startDate, endDate);
+    const gameData = await fetchGameData(SecondGameSession, playerId, timeRange, startDate, endDate);
+
+    const labels = gameData.map((item) => item._id);
+    const data = gameData.map((item) => item.averageScore);
+
+    const response = {
+      labels,
+      datasets: [
+        {
+          label: "Entrepreneurial Edge",
+          data,
+          fill: false,
+        },
+      ],
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error("Error fetching Entrepreneurial Edge data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+module.exports.strategyTrialOverview = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+  // Extract body parameters
+  const timeRange = req.body.range || "monthly"; // Default to monthly
+  const startDate = req.body.startDate; // Expected format: YYYY-MM-DD
+  const endDate = req.body.endDate; // Expected format: YYYY-MM-DD
+
+  try {
+    // Validate dates
+    validateDates(startDate, endDate);
+    const gameData = await fetchGameData(MeetGameGameSession, playerId, timeRange, startDate, endDate);
+
+    const labels = gameData.map((item) => item._id);
+    const data = gameData.map((item) => item.averageScore);
+
+    const response = {
+      labels,
+      datasets: [
+        {
+          label: "Strategy Trial",
+          data,
+          fill: false,
+        },
+      ],
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error("Error fetching Strategy Trial data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+});

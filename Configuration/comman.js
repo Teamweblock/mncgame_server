@@ -9,9 +9,26 @@ const SingleGameSession = require("../model/FirstGame/singleSession.model");
 const SecondGameSession = require("../model/SecondGame/secondgameSession.model");
 const MeetGameGameSession = require("../model/thirdGame/meetSession.model");
 
+const validateDates = (startDate, endDate) => {
+  // Check if startDate and endDate are valid ISO date strings
+  if (startDate && isNaN(Date.parse(startDate))) {
+    throw new Error("Invalid startDate format. Use YYYY-MM-DD.");
+  }
+  if (endDate && isNaN(Date.parse(endDate))) {
+    throw new Error("Invalid endDate format. Use YYYY-MM-DD.");
+  }
+
+  // Check if startDate is before endDate
+  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+    throw new Error("startDate must be earlier than or equal to endDate.");
+  }
+};
+
 const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
   try {
-    // Query all games for the player's data within the date range
+    console.log("Input Dates:", startDate, endDate);
+    console.log("playerId:", playerId);
+
     const [
       singleGameSessions,
       multipleGameSessions,
@@ -20,39 +37,43 @@ const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
     ] = await Promise.all([
       SingleGameSession.find({
         playerId,
-        createdAt: { $gte: startDate, $lte: endDate },
+        updatedAt: { $gte: startDate, $lte: endDate },
       }),
       MultipleGameSession.find({
         playerId,
-        createdAt: { $gte: startDate, $lte: endDate },
+        updatedAt: { $gte: startDate, $lte: endDate },
       }),
       SecondGameSession.find({
         playerId,
-        createdAt: { $gte: startDate, $lte: endDate },
+        updatedAt: { $gte: startDate, $lte: endDate },
       }),
       MeetGameGameSession.find({
         playerId,
-        createdAt: { $gte: startDate, $lte: endDate },
+        updatedAt: { $gte: startDate, $lte: endDate },
       }),
     ]);
 
-    // Helper function to calculate total playtime for a game
-    const calculatePlaytimeForGame = (sessions) =>
-      sessions.reduce((totalPlaytime, session) => {
+    // Helper function to calculate total playtime in milliseconds
+    const calculatePlaytimeForGame = (sessions) => {
+      return sessions.reduce((totalPlaytime, session) => {
         return (
           totalPlaytime +
           session.levelScores.reduce((levelPlaytime, level) => {
-            return (
-              levelPlaytime +
-              level.timeSpent.reduce((timeSum, time) => {
-                const start = new Date(time.startTime);
-                const end = time.endTime ? new Date(time.endTime) : new Date();
-                return timeSum + (end - start); // Difference in milliseconds
-              }, 0)
-            );
+            if (!level.timeSpent || !level.timeSpent.startTime) {
+              return levelPlaytime; // Skip levels without timeSpent
+            }
+
+            const start = new Date(level.timeSpent.startTime);
+            const end = level.timeSpent.endTime
+              ? new Date(level.timeSpent.endTime)
+              : new Date(); // Default to current time if no endTime
+
+            return levelPlaytime + (end - start); // Difference in ms
           }, 0)
         );
       }, 0);
+    };
+
 
     // Helper function to calculate total score for a game
     const calculateTotalScore = (sessions) =>
@@ -79,9 +100,12 @@ const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
         calculateTotalScore(singleGameSessions) +
         calculateTotalScore(multipleGameSessions),
       totalPlayTime:
-        (calculatePlaytimeForGame(singleGameSessions) +
-          calculatePlaytimeForGame(multipleGameSessions)) /
-        3600000, // Convert ms to hours
+        (
+          calculatePlaytimeForGame(singleGameSessions)
+          +
+          calculatePlaytimeForGame(multipleGameSessions)
+        ) /
+        60000, // Convert ms to hours
     };
 
     const entrepreneurialEdgeReport = {
@@ -115,6 +139,48 @@ const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
     throw new Error("Failed to generate weekly analysis.");
   }
 };
+
+const fetchGameData = async (model, playerId, timeRange, startDate, endDate) => {
+  // Validate timeRange
+  const timeGroup = {
+    monthly: { $month: "$updatedAt" },
+    weekly: { $week: "$updatedAt" },
+    custom: { $dateToString: { format: "%Y-%m-%d", date: "$updatedAt" } },
+  }[timeRange];
+
+  if (!timeGroup) {
+    throw new Error("Invalid time range specified.");
+  }
+
+  // Build the $match stage
+  const matchStage = { playerId: playerId };
+
+  // Add date filtering if startDate and endDate are provided
+  if (startDate || endDate) {
+    matchStage.updatedAt = {};
+    if (startDate) {
+      matchStage.updatedAt.$gte = new Date(startDate);
+    }
+    if (endDate) {
+      matchStage.updatedAt.$lte = new Date(endDate);
+    }
+  }
+
+  // Perform aggregation
+  return await model.aggregate([
+    { $match: matchStage },
+    { $unwind: "$levelScores" },
+    {
+      $group: {
+        _id: timeGroup,
+        averageScore: { $avg: "$levelScores.score" },
+      },
+    },
+    { $sort: { "_id": 1 } },
+  ]);
+};
+
+
 
 const getFirstGameQuestions = async ({
   playerIds, // Accept an array of player IDs
@@ -281,5 +347,7 @@ const getThirdGameQuestions = async ({
 module.exports = {
   getFirstGameQuestions,
   getThirdGameQuestions,
-  getWeeklyAnalysis
+  getWeeklyAnalysis,
+  fetchGameData,
+  validateDates
 };

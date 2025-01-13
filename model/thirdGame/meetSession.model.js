@@ -13,12 +13,10 @@ const meetGamegameSessionSchema = new mongoose.Schema(
         roomCode: { type: String },
         isPaired: { type: Boolean, default: true }, // to indicate pairing status
         question: { type: String },
-        timeSpent: [
-          {
-            startTime: { type: Date, required: true }, // When the player started the level
-            endTime: { type: Date }, // When the player finished the level
-          },
-        ],
+        timeSpent: {
+          startTime: { type: Date, default: Date.now() }, // When the player started the level
+          endTime: { type: Date }, // When the player finished the level
+        }
       },
     ],
   },

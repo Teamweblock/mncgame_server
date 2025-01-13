@@ -13,7 +13,10 @@ const {
   getPlayer,
   getWeeklyAnalysis,
   getRecentActivity,
-  skillsOverview
+  skillsOverview,
+  problemPilotOverview,
+  entrepreneurialEdgeOverview,
+  strategyTrialOverview
 } = require("../controllers/playerControllers");
 const {
   creatlevel,
@@ -61,7 +64,9 @@ router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
 
 router.post("/userskillsoverview", isAuthenticatedUser, skillsOverview);
 
-
+router.get("/problem-pilot", isAuthenticatedUser, problemPilotOverview);
+router.get("/entrepreneurial-edge", isAuthenticatedUser, entrepreneurialEdgeOverview);
+router.get("/strategy-trial", isAuthenticatedUser, strategyTrialOverview);
 
 /* --------- level crud section ----------  */
 

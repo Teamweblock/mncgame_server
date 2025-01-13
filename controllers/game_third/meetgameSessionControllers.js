@@ -171,8 +171,8 @@ module.exports.submitMultiAnswer = catchAsyncErrors(async (req, res, next) => {
       (ls) => ls.level.toString() === getLevel._id.toString()
     );
 
-    if (existingLevel && existingLevel.questions[index]) {
-      const questionEntry = existingLevel.questions[index];
+    if (existingLevel && existingLevel.question[index]) {
+      const questionEntry = existingLevel.question[index];
 
       // Check if the question ID matches the one in the current entry
       if (questionEntry?.questionId?.toString() === questionId?.toString()) {

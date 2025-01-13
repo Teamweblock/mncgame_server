@@ -126,6 +126,7 @@ module.exports.getQuestionsForsingleLevel = catchAsyncErrors(
       if (!gameSession) {
         gameSession = await Gamesession.create({ playerId });
       }
+      console.log("gameSession", gameSession);
 
       // Check if level data already exists in session
       let levelScoreData = gameSession?.levelScores.find(
@@ -253,6 +254,12 @@ module.exports.submitAnswer = catchAsyncErrors(async (req, res, next) => {
         if (!player.completedLevels.includes(getLevel?._id)) {
           player.completedLevels.push(getLevel._id);
           player.currentLevel = level
+        }
+        const gameSession = player?.levelScores.find(session => session?.level.toString() === getLevel?._id.toString());
+
+        if (gameSession) {
+          // Update the endTime when the level is completed
+          gameSession.timeSpent.endTime = new Date();
         }
       }
     } else {

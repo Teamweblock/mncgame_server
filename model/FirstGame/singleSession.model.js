@@ -26,12 +26,10 @@ const singlegameSessionSchema = new mongoose.Schema(
             score: { type: Number, default: 0 },
           },
         ],
-        timeSpent: [
-          {
-            startTime: { type: Date, required: true }, // When the player started the level
-            endTime: { type: Date }, // When the player finished the level
-          },
-        ],
+        timeSpent: {
+          startTime: { type: Date, default: Date.now() }, // When the player started the level
+          endTime: { type: Date }, // When the player finished the level
+        }
       },
     ],
   },
