@@ -444,7 +444,7 @@ module.exports.getWeeklyAnalysis = catchAsyncErrors(async (req, res) => {
     //   startDate = new Date(startDate);
     //   endDate = new Date(endDate);
     // }
-    
+
     // Calculate the last 7 days (including today) if dates are not provided
     if (!startDate || !endDate) {
       const today = new Date();
@@ -591,19 +591,16 @@ module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
         {
           label: "Problem Pilot",
           data: prepareData(firstGameData),
-          borderColor: "blue",
           fill: false,
         },
         {
           label: "Entrepreneurial Edge",
           data: prepareData(secondGameData),
-          borderColor: "cyan",
           fill: false,
         },
         {
           label: "Strategy Trial",
           data: prepareData(thirdGameData),
-          borderColor: "orange",
           fill: false,
         },
       ],
