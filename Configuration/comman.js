@@ -26,8 +26,6 @@ const validateDates = (startDate, endDate) => {
 
 const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
   try {
-    console.log("Input Dates:", startDate, endDate);
-    console.log("playerId:", playerId);
 
     const [
       singleGameSessions,

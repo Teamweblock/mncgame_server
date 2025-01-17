@@ -14,6 +14,7 @@ const {
   getWeeklyAnalysis,
   getRecentActivity,
   skillsOverview,
+  gameOverview,
   problemPilotOverview,
   entrepreneurialEdgeOverview,
   strategyTrialOverview
@@ -64,6 +65,7 @@ router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
 
 router.post("/userskillsoverview", isAuthenticatedUser, skillsOverview);
 
+router.get("/gameOverview", isAuthenticatedUser, gameOverview);
 router.get("/problem-pilot", isAuthenticatedUser, problemPilotOverview);
 router.get("/entrepreneurial-edge", isAuthenticatedUser, entrepreneurialEdgeOverview);
 router.get("/strategy-trial", isAuthenticatedUser, strategyTrialOverview);

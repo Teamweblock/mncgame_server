@@ -613,39 +613,148 @@ module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
   }
 });
 
-
-module.exports.problemPilotOverview = catchAsyncErrors(async (req, res) => {
+module.exports.gameOverview = catchAsyncErrors(async (req, res) => {
   const user = req.user;
   const playerId = user._id;
-  // Extract body parameters
-  const timeRange = req.body.range || "monthly"; // Default to monthly
-  const startDate = req.body.startDate; // Expected format: YYYY-MM-DD
-  const endDate = req.body.endDate; // Expected format: YYYY-MM-DD
 
+  // Extract body parameters
+  const timeRange = req?.body?.range || "monthly"; // Default to monthly
+  const startDate = req?.body?.startDate; // Expected format: YYYY-MM-DD
+  const endDate = req?.body?.endDate; // Expected format: YYYY-MM-DD
+  const gameTypes = req?.body?.gameTypes || ["problemPilot", "entrepreneurialEdge", "strategyTrial"]; // Default gameTypes if not provided
 
   try {
     // Validate dates
     validateDates(startDate, endDate);
+
+    // Initialize the response object
+    const response = {
+      datasets: []
+    };
+
+    // Loop through each gameType and fetch the corresponding data
+    for (const gameType of gameTypes) {
+      let gameSession;
+      let label;
+
+      switch (gameType) {
+        case 'problemPilot':
+          gameSession = SingleGameSession;
+          label = "Problem Pilot";
+          break;
+        case 'entrepreneurialEdge':
+          gameSession = SecondGameSession;
+          label = "Entrepreneurial Edge";
+          break;
+        case 'strategyTrial':
+          gameSession = MeetGameGameSession;
+          label = "Strategy Trial";
+          break;
+        default:
+          return res.status(400).json({ message: `Invalid game type: ${gameType}` });
+      }
+
+      // Fetch the game data for the specific game type
+      const gameData = await fetchGameData(gameSession, playerId, timeRange, startDate, endDate);
+
+      // Extract the labels (dates) and the corresponding data
+      const labels = gameData.map((item) => item._id);
+      const data = gameData.map((item) => item.averageScore);
+
+      // Round each average score to two decimal places
+      const roundedData = data.map(score => parseFloat(score.toFixed(2)));
+
+      // Calculate the total score for the game type and round it to two decimal places
+      const totalData = roundedData.reduce((acc, score) => acc + score, 0);
+      const roundedTotalData = parseFloat(totalData.toFixed(2));
+
+      // Add the game data to the response object with its own labels
+      response.datasets.push({
+        label: label,
+        labels: labels,  // Adding labels here
+        data: roundedData,
+        Totaldata: roundedTotalData,
+      });
+    }
+
+    return res.json(response);
+  } catch (error) {
+    console.error("Error fetching game data:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+module.exports.problemPilotOverview = catchAsyncErrors(async (req, res) => {
+  const user = req.user;
+  const playerId = user._id;
+
+  // Extract body parameters
+  const timeRange = req?.body?.range || "monthly"; // Default to monthly
+  const startDate = req?.body?.startDate; // Expected format: YYYY-MM-DD
+  const endDate = req?.body?.endDate; // Expected format: YYYY-MM-DD
+
+  try {
+    // Validate dates
+    validateDates(startDate, endDate);
+
+    // Fetch data for both single and multiple game sessions
     const gameData = await fetchGameData(SingleGameSession, playerId, timeRange, startDate, endDate);
+    const multigameData = await fetchGameData(MultipleGameSession, playerId, timeRange, startDate, endDate);
 
-    const labels = gameData.map((item) => item._id);
-    const data = gameData.map((item) => item.averageScore);
+    // Combine labels and data
+    const labels = [
+      ...new Set([
+        ...gameData.map((item) => item._id),
+        ...multigameData.map((item) => item._id),
+      ]),
+    ];
+    const singleGameScores = gameData.reduce((acc, item) => {
+      acc[item._id] = item.averageScore;
+      return acc;
+    }, {});
+    const multiGameScores = multigameData.reduce((acc, item) => {
+      acc[item._id] = item.averageScore;
+      return acc;
+    }, {});
 
+    const data = labels.map((label) => ({
+      label,
+      singleGameScore: parseFloat((singleGameScores[label] || 0).toFixed(2)),
+      multiGameScore: parseFloat((multiGameScores[label] || 0).toFixed(2)),
+    }));
+
+
+    // Calculate totals
+    const totalSingleGameScore = data.reduce((acc, item) => acc + item.singleGameScore, 0).toFixed(2);
+    const totalMultiGameScore = data.reduce((acc, item) => acc + item.multiGameScore, 0).toFixed(2);
+    const totalOverallScore = (parseFloat(totalSingleGameScore) + parseFloat(totalMultiGameScore)).toFixed(2);
+
+    // Structure the response
     const response = {
       labels,
       datasets: [
         {
-          label: "Problem Pilot",
-          data,
+          label: "Self Progress",
+          data: data.map((d) => d.singleGameScore),
+          fill: false,
+        },
+        {
+          label: "Peer Reviews",
+          data: data.map((d) => d.multiGameScore),
           fill: false,
         },
       ],
+      totals: {
+        selfProgressScore: parseFloat(totalSingleGameScore),
+        peerReviewsScore: parseFloat(totalMultiGameScore),
+        overallScore: parseFloat(totalOverallScore),
+      },
     };
 
     return res.json(response);
   } catch (error) {
-    console.error("Error fetching Problem Pilot data:", error);
-    res.status(500).json({ message: "Server Error" });
+    console.error("Error fetching Problem Pilot data:", error.message);
+    res.status(500).json({ message: error.message || "Server Error" });
   }
 });
 
@@ -665,15 +774,18 @@ module.exports.entrepreneurialEdgeOverview = catchAsyncErrors(async (req, res) =
     const labels = gameData.map((item) => item._id);
     const data = gameData.map((item) => item.averageScore);
 
+    // Calculate the total of averageScore
+    const total = data.reduce((acc, score) => acc + score, 0);
+
     const response = {
       labels,
       datasets: [
         {
           label: "Entrepreneurial Edge",
           data,
-          fill: false,
         },
       ],
+      total, // Add the total to the response
     };
 
     return res.json(response);
@@ -705,7 +817,6 @@ module.exports.strategyTrialOverview = catchAsyncErrors(async (req, res) => {
         {
           label: "Strategy Trial",
           data,
-          fill: false,
         },
       ],
     };
