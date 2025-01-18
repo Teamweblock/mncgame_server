@@ -64,7 +64,34 @@ const sendGameInviteEmail = async (toEmail, teamName) => {
   }
 };
 
+// Function to send a notification email
+const sendNotificationEmail = async (name, email, subject, message) => {
+  const mailOptions = {
+    from: process.env.GMAIL_USER,
+    to: "multinetworkingcompany@gmail.com",
+    subject: `New Contact Message: ${subject}`,
+    html: `
+      <p><strong>Name:</strong> ${name}</p>
+      <p><strong>Email:</strong> ${email}</p>
+      <p><strong>Subject:</strong> ${subject}</p>
+      <p><strong>Message:</strong></p>
+      <p>${message}</p>
+    `,
+  };
+
+  try {
+    const transporter = createTransporter();
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Notification email sent: " + info.response);
+  } catch (error) {
+    console.error("Error sending notification email: ", error);
+    throw new Error("Error sending notification email");
+  }
+};
+
+
 module.exports = {
   sendResetPasswordEmail,
-  sendGameInviteEmail
+  sendGameInviteEmail,
+  sendNotificationEmail
 };

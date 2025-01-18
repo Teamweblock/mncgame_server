@@ -5,7 +5,7 @@ const crypto = require("crypto");
 const ErrorHander = require("../utils/errorhandaler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const { JWT_ACCESS_SECRET, JWT_ACCESS_TIME } = require("../config");
-const { sendResetPasswordEmail } = require("../Configuration/emailService");
+const { sendResetPasswordEmail, sendNotificationEmail } = require("../Configuration/emailService");
 const { oauth2Client } = require('../Configuration/passport');
 const { getWeeklyAnalysis, fetchGameData, validateDates } = require("../Configuration/comman");
 // Import game models
@@ -13,6 +13,7 @@ const MultipleGameSession = require("../model/FirstGame/multipleSession.model");
 const SingleGameSession = require("../model/FirstGame/singleSession.model");
 const SecondGameSession = require("../model/SecondGame/secondgameSession.model");
 const MeetGameGameSession = require("../model/thirdGame/meetSession.model");
+const ConnectMessageModel = require("../model/ConnectMessage.model");
 
 // Register API (create Players)
 module.exports.registerPlayer = catchAsyncErrors(async (req, res, next) => {
@@ -412,6 +413,29 @@ module.exports.updatepassword = catchAsyncErrors(async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// API Endpoint to handle incoming messages
+module.exports.ConnectMessage = catchAsyncErrors(async (req, res, next) => {
+  const { name, email, subject, message } = req.body;
+
+  if (!name || !email || !subject || !message) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+
+  try {
+    // Save the message to the database
+    const newMessage = new ConnectMessageModel({ name, email, subject, message });
+    await newMessage.save();
+
+    // Send a notification email
+    await sendNotificationEmail(name, email, subject, message);
+
+    res.status(200).json({ message: "Message received, saved, and notification email sent successfully!" });
+  } catch (error) {
+    console.error("Error processing the message:", error);
+    res.status(500).json({ error: "Failed to process the message. Please try again." });
   }
 });
 

@@ -9,6 +9,7 @@ const {
   updatePlayers,
   resetpassword,
   forgotpassword,
+  ConnectMessage,
   googleAuth,
   getPlayer,
   getWeeklyAnalysis,
@@ -43,9 +44,9 @@ router.post("/register", registerPlayer);
 router.post("/login", loginPlayer);
 router.post("/auth/google", googleAuth);
 router.get("/profile", isAuthenticatedUser, getPlayer);
-
 router.post("/forgotpassword", forgotpassword);
 router.post("/resetpassword", resetpassword);
+router.post("/connect", ConnectMessage);
 
 //getAllplayers
 router.get("/all", getallPlayers);
@@ -60,11 +61,8 @@ router.delete("/", deletePlayer);
 router.put("/", updatePlayers);
 
 router.post("/weeklyanalysis", isAuthenticatedUser, getWeeklyAnalysis);
-
 router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
-
 router.post("/userskillsoverview", isAuthenticatedUser, skillsOverview);
-
 router.get("/gameOverview", isAuthenticatedUser, gameOverview);
 router.get("/problem-pilot", isAuthenticatedUser, problemPilotOverview);
 router.get("/entrepreneurial-edge", isAuthenticatedUser, entrepreneurialEdgeOverview);
