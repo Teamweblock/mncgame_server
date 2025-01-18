@@ -11,14 +11,11 @@ async function eventFormeet(socket, MeetGroups, io, playerId, role) {
     timestamp: Date.now(),
     role
   };
-  console.log(playerData, 'playerData');
-
   // Avoid duplicate entries with the same role in the same group
   const isPlayerAlreadyInGroup = MeetGroups.some(
     (p) => p.playerId === playerId
   );
   console.log(isPlayerAlreadyInGroup, 'isPlayerAlreadyInGroup');
-
   if (isPlayerAlreadyInGroup) {
     socket.emit("errorMessage", "You are already in the queue for this group.");
     return;
@@ -32,7 +29,7 @@ async function eventFormeet(socket, MeetGroups, io, playerId, role) {
   // Create a new waiting array if same role found, else add to the current group
   let newWaitingArray = [];
   if (sameRolePlayer) {
-    console.log('Same role found, creating a new waiting array.');
+    // console.log('Same role found, creating a new waiting array.');
     newWaitingArray.push(playerData); // Add player to the new waiting array
     socket.emit("errorMessage", "Players with the same role are already in the group. You are placed in a new queue.");
   } else {
@@ -60,7 +57,7 @@ async function eventFormeet(socket, MeetGroups, io, playerId, role) {
 }
 
 async function updatePlayersStatus(io, players) {
-  console.log(players, "players");
+  // console.log(players, "players");
 
   // Fetch additional information for all players
   const playerDetails = await Promise.all(
@@ -76,7 +73,7 @@ async function updatePlayersStatus(io, players) {
       };
     })
   );
-  console.log(playerDetails, "playerDetails");
+  // console.log(playerDetails, "playerDetails");
 
   // Emit the updated player details
   io.emit("playersStatus", playerDetails);
@@ -84,7 +81,7 @@ async function updatePlayersStatus(io, players) {
 
 // Function to match players and handle pairing different roles
 async function matchPlayers(waitingPlayers, io, newWaitingArray) {
-  console.log("Waiting players:", waitingPlayers);
+  // console.log("Waiting players:", waitingPlayers);
 
   // Merge the new waiting array with the current queue
   if (newWaitingArray.length > 0) {
@@ -93,11 +90,9 @@ async function matchPlayers(waitingPlayers, io, newWaitingArray) {
 
   // Match in groups of 4 players
   while (waitingPlayers.length >= 4) {
-
     // Try to pair players with different roles
     const matchedPlayers = [];
     let roleCount = {};
-
     // Loop through the players and ensure roles are unique
     for (let i = 0; i < waitingPlayers.length; i++) {
       const player = waitingPlayers[i];
@@ -108,7 +103,6 @@ async function matchPlayers(waitingPlayers, io, newWaitingArray) {
         matchedPlayers.push(player);
         roleCount[player.role]++;
       }
-
       if (matchedPlayers.length === 4) {
         break;
       }
@@ -116,14 +110,12 @@ async function matchPlayers(waitingPlayers, io, newWaitingArray) {
 
     // If 4 unique role players are found, form a match
     if (matchedPlayers.length === 4) {
-      console.log("Matched players:", matchedPlayers);
-
+      // console.log("Matched players:", matchedPlayers);
       // Remove the matched players from the waiting list
       matchedPlayers.forEach(player => {
         const index = waitingPlayers.findIndex(p => p.playerId === player.playerId);
         if (index !== -1) waitingPlayers.splice(index, 1);
       });
-
       // Create a match with the matched players
       await createMatch(io, matchedPlayers, waitingPlayers);
     } else {
@@ -143,7 +135,7 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
   if (sockets.every((socket) => socket)) {
     // Add players to the room
     sockets.forEach((socket) => socket.join(roomCode));
-    console.log("Room created:", roomCode);
+    // console.log("Room created:", roomCode);
     // Extract playerIds
     const playerIds = matchedPlayers.map(player => player.playerId);
 
@@ -151,8 +143,7 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
       playerIds,
       roomCode,
     });
-    console.log("questions:", questions);
-
+    // console.log("questions:", questions);
     // Emit player details to the room
     const playerDetails = await Promise.all(
       matchedPlayers.map(async (player) => {
@@ -175,7 +166,7 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
     const playersWithDetails = matchedPlayers.map((player, index) => ({
       ...player,
       firstName: playerDetails[index]?.firstName || "Unknown",
-      lastName: playerDetails[index]?.lastname || "Unknown",
+      lastName: playerDetails[index]?.lastName || "Unknown",
       avatar: playerDetails[index]?.avatar || null,
     }));
     // Start the question timer with player details
@@ -213,11 +204,10 @@ async function startQuestionmeet(io, roomCode, questions, players) {
     const question = await thirdQuestion.findById(que);
 
     if (question) {
-      console.log("Question:", question);
+      // console.log("Question:", question);
       // Emit the question to the room and players data
       const socketsInRoom = await io.in(roomCode).allSockets();
-      console.log("Sockets in room:", socketsInRoom);
-
+      // console.log("Sockets in room:", socketsInRoom);
       io.to(roomCode).emit("newQuestion", {
         question,
         players
@@ -229,7 +219,6 @@ async function startQuestionmeet(io, roomCode, questions, players) {
   } catch (error) {
     console.error("Error fetching question:", error);
   }
-
   console.log("Players:", players);
 }
 

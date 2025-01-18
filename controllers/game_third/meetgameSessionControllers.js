@@ -2,7 +2,6 @@ const MeetGamesession = require("../../model/thirdGame/meetSession.model");
 const Question = require("../../model/FirstGame/multipleQuestion.model");
 const Player = require("../../model/Player.model");
 const Level = require("../../model/Level.model");
-const ErrorHander = require("../../utils/errorhandaler");
 const catchAsyncErrors = require("../../middleware/catchAsyncErrors");
 const { default: mongoose } = require("mongoose");
 

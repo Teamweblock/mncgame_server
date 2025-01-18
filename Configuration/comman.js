@@ -178,8 +178,6 @@ const fetchGameData = async (model, playerId, timeRange, startDate, endDate) => 
   ]);
 };
 
-
-
 const getFirstGameQuestions = async ({
   playerIds, // Accept an array of player IDs
   level,
@@ -275,7 +273,6 @@ const getFirstGameQuestions = async ({
   }
 };
 
-
 const getThirdGameQuestions = async ({
   playerIds, // Accept an array of player IDs
   roomCode,
@@ -308,14 +305,11 @@ const getThirdGameQuestions = async ({
       if (!gameSession) {
         gameSession = await MeetGameGameSession.create({ playerId });
       }
-      console.log("gameSession", gameSession);
 
       // Check if the player already has a level entry for this roomCode
       const levelScoreData = gameSession.levelScores.find(
-        (code) => console.log('code', code)
-        //  code.roomCode === roomCode
-      );
-      console.log("levelScoreData", levelScoreData);
+        (code) => code.roomCode === roomCode);
+      // console.log("levelScoreData", levelScoreData);
 
       if (!levelScoreData) {
         // Add a new level entry for the player
@@ -323,7 +317,7 @@ const getThirdGameQuestions = async ({
           score: 0,
           isPaired: true,
           roomCode: roomCode,
-          questions: randomQuestion?._id,
+          question: randomQuestion?._id,
         });
       } else {
         // Update existing questions for the level
