@@ -63,9 +63,9 @@ router.put("/", updatePlayers);
 router.post("/weeklyanalysis", isAuthenticatedUser, getWeeklyAnalysis);
 router.post("/recentactivity", isAuthenticatedUser, getRecentActivity);
 router.post("/userskillsoverview", isAuthenticatedUser, skillsOverview);
-router.get("/gameOverview", isAuthenticatedUser, gameOverview);
-router.get("/problem-pilot", isAuthenticatedUser, problemPilotOverview);
-router.get("/entrepreneurial-edge", isAuthenticatedUser, entrepreneurialEdgeOverview);
+router.post("/gameOverview", isAuthenticatedUser, gameOverview);
+router.post("/problem-pilot", isAuthenticatedUser, problemPilotOverview);
+router.post("/entrepreneurial-edge", isAuthenticatedUser, entrepreneurialEdgeOverview);
 router.get("/strategy-trial", isAuthenticatedUser, strategyTrialOverview);
 
 /* --------- level crud section ----------  */

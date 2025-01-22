@@ -640,7 +640,6 @@ module.exports.skillsOverview = catchAsyncErrors(async (req, res) => {
 module.exports.gameOverview = catchAsyncErrors(async (req, res) => {
   const user = req.user;
   const playerId = user._id;
-
   // Extract body parameters
   const timeRange = req?.body?.range || "monthly"; // Default to monthly
   const startDate = req?.body?.startDate; // Expected format: YYYY-MM-DD
@@ -650,7 +649,6 @@ module.exports.gameOverview = catchAsyncErrors(async (req, res) => {
   try {
     // Validate dates
     validateDates(startDate, endDate);
-
     // Initialize the response object
     const response = {
       datasets: []
