@@ -274,9 +274,10 @@ const getFirstGameQuestions = async ({
 };
 
 const getThirdGameQuestions = async ({
-  playerIds, // Accept an array of player IDs
+  playerData, // Accept an array of player objects containing playerId and role
   roomCode,
 }) => {
+  console.log("playerData", playerData);
   try {
     // Fetch all questions from the Questions model
     const allQuestions = await thirdQuestion.find();
@@ -292,8 +293,8 @@ const getThirdGameQuestions = async ({
     const results = [];
     console.log("randomQuestion", randomQuestion);
 
-    // Process each player ID
-    for (const playerId of playerIds) {
+    // Process each playerData which includes playerId and role
+    for (const { playerId, role } of playerData) {
       const player = await Player.findById(playerId);
       if (!player) {
         results.push({ playerId, error: "Player not found" });
@@ -308,11 +309,12 @@ const getThirdGameQuestions = async ({
 
       // Check if the player already has a level entry for this roomCode
       const levelScoreData = gameSession.levelScores.find(
-        (code) => code.roomCode === roomCode);
-      // console.log("levelScoreData", levelScoreData);
+        (code) => code.roomCode === roomCode
+      );
 
       if (!levelScoreData) {
-        // Add a new level entry for the player
+        // Add a new level entry for the player with role
+        gameSession.role = role
         gameSession.levelScores.push({
           score: 0,
           isPaired: true,
@@ -334,6 +336,7 @@ const getThirdGameQuestions = async ({
     throw new Error(error?.message || "An unexpected error occurred");
   }
 };
+
 
 
 module.exports = {

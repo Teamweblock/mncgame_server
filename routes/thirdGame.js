@@ -19,7 +19,8 @@ const {
 
 const {
   joinmeetGame,
-  submitMultiAnswer
+  updateProgress,
+  getPlayerResults
 } = require("../controllers/game_third/meetgameSessionControllers");
 /*  Role crud section  */
 
@@ -55,11 +56,17 @@ router.delete("/meet/question/", deletemeetQuestion);
 //Update
 router.put("/meet/question/", updatemeetQuestions);
 
-router.post("/meet/submitanswer", isAuthenticatedUser, submitMultiAnswer);
+// router.post("/meet/submitanswer", isAuthenticatedUser, submitMultiAnswer);
 
 /* --------- game crud section ----------  */
 
 //joinmeetGame
 router.post("/joinmeetGame", isAuthenticatedUser, joinmeetGame);
+
+// submit answer
+router.post("/updateProgress", isAuthenticatedUser, updateProgress);
+
+// get result
+router.post("/PlayerResults", isAuthenticatedUser, getPlayerResults);
 
 module.exports = router;

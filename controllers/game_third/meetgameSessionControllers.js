@@ -153,186 +153,274 @@ module.exports.getQuestionsFormultipleLevel = catchAsyncErrors(
   }
 );
 
-// Submit answers for a level
-module.exports.submitMultiAnswer = catchAsyncErrors(async (req, res, next) => {
-  const { level, answers, questionId, index } = req.body;
-  const user = req.user;
-  const playerId = user._id;
-
+module.exports.updateProgress = catchAsyncErrors(async (req, res) => {
   try {
-    const getLevel = await Level.findOne({ levelNumber: level });
-    if (!getLevel) return res.status(404).json({ error: "Level not found" });
-    const player = await MeetGamesession.findOne({ playerId });
-    if (!player) return res.status(404).json({ error: "Player not found" });
+    const user = req.user; // Assuming you are using authentication middleware
+    const playerId = user._id; // Get the playerId from the authenticated user
+    const { roomCode, progress, role } = req.body; // Get roomCode and progress from request body
 
-    // Find if the level already exists in the player's levelScores
-    const existingLevel = player.levelScores.find(
-      (ls) => ls.level.toString() === getLevel._id.toString()
-    );
-
-    if (existingLevel && existingLevel.question[index]) {
-      const questionEntry = existingLevel.question[index];
-
-      // Check if the question ID matches the one in the current entry
-      if (questionEntry?.questionId?.toString() === questionId?.toString()) {
-        const question = await Question.findById(questionId);
-        if (!question)
-          return res.status(404).json({ error: "Question not found" });
-
-        // Remove the score update logic here
-        questionEntry.answer = answers;
-      }
-
-      // Special case for index 9: Do not calculate average score
-      if (index == 9) {
-        // Mark the level as completed if not already in completedLevels
-        if (!player.completedLevels.includes(getLevel._id)) {
-          player.completedLevels.push(getLevel._id);
-          player.currentLevel = level;
-        }
-      }
-    } else {
-      return res
-        .status(400)
-        .json({ error: "Invalid index or question does not exist" });
+    // Validate the required fields
+    if (!playerId || !roomCode || !progress) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Save player data after updating
-    await player.save();
+    // Ensure all required progress fields are present
+    const requiredFields = [
+      "creativity", "strategicThinking", "fundamentalSkills", "managementSkills", "overallImpact"
+    ];
 
-    res.status(200).json({ success: true, error: false, player });
-  } catch (error) {
-    console.error("Error submitting answers:", error);
-    res.status(500).json({ error: "Failed to submit answers." });
-  }
-});
+    for (let field of requiredFields) {
+      if (progress[field] === undefined) {
+        return res.status(400).json({ message: `Missing ${field} in progress` });
+      }
+    }
 
-module.exports.getplayerResult = catchAsyncErrors(async (req, res) => {
-  const user = req.user;
-  const playerId = user._id;
-  const { level } = req.body;
+    // Find the session with matching roomCode
+    let gameSession = await MeetGamesession.findOne({
+      "levelScores.roomCode": roomCode,
+    });
 
-  try {
-    // Find the player
-    const player = await MeetGamesession.findOne({ playerId });
-    if (!player) return res.status(404).json({ error: "Player not found" });
-    const getLevel = await Level.findOne({ levelNumber: level });
+    if (!gameSession) {
+      return res.status(404).json({ message: "Game session not found" });
+    }
 
-    // Filter the specific level score
-    const levelScore = player.levelScores.find(
-      (score) => score.level.toString() === getLevel?._id.toString()
+    // Find the levelScores entry for the matching roomCode
+    let levelScore = gameSession.levelScores.find(
+      (ls) => ls.roomCode === roomCode
     );
 
     if (!levelScore) {
-      return res.status(404).json({ error: "Level score not found" });
+      return res.status(404).json({ message: "Room code not found in session" });
     }
 
-    // Create a response with only the filtered level score
-    const response = {
-      ...player._doc, // Include other player properties
-      levelScores: [levelScore], // Only include the filtered level score
-    };
+    // Find or create the player progress in userprogress
+    let playerProgress = levelScore.userprogress.find(
+      (user) => user.playerId.toString() === playerId.toString()
+    );
 
-    return res.status(200).json(response);
-  } catch (error) {
-    console.error("Error fetching level score:", error);
-    res.status(500).json({ error: "Failed to fetch level score." });
-  }
-});
-
-module.exports.overallPerformance = catchAsyncErrors(async (req, res) => {
-  const user = req.user;
-  const playerId = user._id;
-
-  try {
-    const playerSession = await MeetGamesession.aggregate([
-      { $match: { playerId: new mongoose.Types.ObjectId(playerId) } }, // Find the player's session
-      { $unwind: "$levelScores" }, // Unwind the levelScores array to process each entry
-      {
-        $project: {
-          "levelScores.score": 1, // Get the score for each level
-          "levelScores.level": 1, // Get the level reference
-        },
-      },
-      {
-        $group: {
-          _id: "$playerId", // Group by playerId
-          totalScore: { $sum: "$levelScores.score" }, // Sum all scores
-          levelCount: { $sum: 1 }, // Count the number of levels played
-          levelScores: { $push: "$levelScores" }, // Push level scores into an array
-        },
-      },
-    ]);
-
-    if (playerSession.length > 0) {
-      const playerData = playerSession[0];
-      const totalScore = playerData.totalScore;
-      const levelCount = playerData.levelCount;
-
-      // You can now calculate the overall score percentage
-      const overallScorePercentage = (totalScore / (levelCount * 100)) * 100; // Assuming max score per level is 100
-
-      return res.json({
-        levelScores: playerData.levelScores, // Array of level scores
-        overallScorePercentage: overallScorePercentage.toFixed(2), // Overall score percentage
+    if (!playerProgress) {
+      // If player progress doesn't exist, create it
+      let updatePlayer = await MeetGamesession.findOne({
+        "levelScores.roomCode": roomCode,
+        role: role,
+      });
+      levelScore.userprogress.push({
+        playerId: new mongoose.Types.ObjectId(updatePlayer?._id),
+        ...progress,
       });
     } else {
-      return res.status(404).json({ error: "Player session not found." });
+      // If player progress exists, update it
+      playerProgress.creativity = parseFloat((progress.creativity || playerProgress.creativity).toFixed(2));
+      playerProgress.strategicThinking = parseFloat((progress.strategicThinking || playerProgress.strategicThinking).toFixed(2));
+      playerProgress.fundamentalSkills = parseFloat((progress.fundamentalSkills || playerProgress.fundamentalSkills).toFixed(2));
+      playerProgress.managementSkills = parseFloat((progress.managementSkills || playerProgress.managementSkills).toFixed(2));
+      playerProgress.overallImpact = parseFloat((progress.overallImpact || playerProgress.overallImpact).toFixed(2));
+
     }
-  } catch (error) {
-    return res.status(500).json({
-      error:
-        "Failed to get particular player's overall performance. Please try again later.",
+
+    // Save the updated session
+    await gameSession.save();
+
+    // Return the updated session and progress
+    return res.status(200).json({
+      status: true,
+      message: "Progress updated successfully",
+      updatedProgress: levelScore,
     });
+  } catch (error) {
+    console.error("Error updating progress:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-// API Endpoint to Update Progress
-module.exports.updateProgress = catchAsyncErrors(async (req, res) => {
-  const { playerId, levelId, questionId, score } = req.body;
-
-  // Validate inputs
-  if (!playerId || !levelId || !questionId || typeof score !== "number") {
-    return res.status(400).json({ message: "Invalid input parameters." });
-  }
-
+module.exports.getPlayerResults = catchAsyncErrors(async (req, res) => {
   try {
-    // Find the session for the player
-    const session = await MeetGamesession.findOne({ playerId });
+    const user = req.user;
+    const playerId = user._id; // Player 1 (the main player)
+    const { roomCode } = req.body; // playerId: Player 1, roomCode to identify the session
 
-    if (!session) {
-      return res.status(404).json({ message: "Player session not found." });
+    if (!roomCode || !playerId) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Find the levelScores entry for the specific level
-    const levelScore = session.levelScores.find(
-      (ls) => ls.level.toString() === levelId
+    // Find the session with matching roomCode and playerId
+    let gameSession = await MeetGamesession.findOne({
+      "levelScores.roomCode": roomCode,
+      playerId: new mongoose.Types.ObjectId(playerId)
+    });
+
+    if (!gameSession) {
+      return res.status(404).json({ message: "Game session not found" });
+    }
+
+    // Find the levelScores entry for the given roomCode
+    let levelScore = gameSession.levelScores.find(
+      (ls) => ls.roomCode === roomCode
     );
 
     if (!levelScore) {
-      return res.status(404).json({ message: "Level not found in session." });
+      return res.status(404).json({ message: "Room code not found in session" });
     }
 
-    // Find the specific question and update the score
-    const question = levelScore.questions.find(
-      (q) => q.questionId.toString() === questionId
-    );
+    // Calculate category averages for all players (Player 1, 2, 3, 4)
+    let categoryAverages = {
+      creativity: 0,
+      strategicThinking: 0,
+      fundamentalSkills: 0,
+      managementSkills: 0,
+      overallImpact: 0,
+    };
 
-    if (!question) {
-      return res.status(404).json({ message: "Question not found in level." });
-    }
+    // Player Results Array to store each player's result
+    let playerResults = [];
 
-    question.score = score;
+    // Loop through the user progress for Player 2, 3, and 4 (assuming Player 1 is storing their scores)
+    levelScore.userprogress.forEach((userProgress, index) => {
+      const playerName = userProgress.playerId.name; // Assuming player name is in userProgress
 
-    // Save the updated session
-    await session.save();
+      const avgCategoryScores = {
+        creativity: parseFloat(userProgress.creativity.toFixed(2)),
+        strategicThinking: parseFloat(userProgress.strategicThinking.toFixed(2)),
+        fundamentalSkills: parseFloat(userProgress.fundamentalSkills.toFixed(2)),
+        managementSkills: parseFloat(userProgress.managementSkills.toFixed(2)),
+        overallImpact: parseFloat(userProgress.overallImpact.toFixed(2)),
+      };
 
-    res.status(200).json({
-      message: "Score updated successfully.",
-      data: session,
+      // Calculate category-wise averages for this player
+      const totalScore = Object.values(avgCategoryScores).reduce(
+        (acc, score) => acc + score,
+        0
+      );
+      const avgScore = parseFloat((totalScore / 5).toFixed(2));
+
+      // Add player's category averages and overall average score to the results
+      playerResults.push({
+        playerId: userProgress.playerId._id,
+        playerName,
+        categoryAverages: avgCategoryScores,
+        avgScore,
+      });
+
+      // Add to overall category averages
+      categoryAverages.creativity += avgCategoryScores.creativity;
+      categoryAverages.strategicThinking += avgCategoryScores.strategicThinking;
+      categoryAverages.fundamentalSkills += avgCategoryScores.fundamentalSkills;
+      categoryAverages.managementSkills += avgCategoryScores.managementSkills;
+      categoryAverages.overallImpact += avgCategoryScores.overallImpact;
+    });
+
+    // Calculate overall averages for all players
+    const numPlayers = playerResults.length;
+    const overallCategoryAverages = {
+      creativity: parseFloat((categoryAverages.creativity / numPlayers).toFixed(2)),
+      strategicThinking: parseFloat((categoryAverages.strategicThinking / numPlayers).toFixed(2)),
+      fundamentalSkills: parseFloat((categoryAverages.fundamentalSkills / numPlayers).toFixed(2)),
+      managementSkills: parseFloat((categoryAverages.managementSkills / numPlayers).toFixed(2)),
+      overallImpact: parseFloat((categoryAverages.overallImpact / numPlayers).toFixed(2)),
+    };
+
+    return res.status(200).json({
+      message: "Player results fetched successfully",
+      playerId,
+      overallCategoryAverages,
+      // playerResults,
     });
   } catch (error) {
-    console.error("Error updating score:", error);
-    res.status(500).json({ message: "Internal server error." });
+    console.error("Error fetching player results:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+
+module.exports.overallPerformance = catchAsyncErrors(async (req, res) => {
+  try {
+    const user = req.user;
+    const playerId = user._id; // Player 1 (the main player)
+    const { roomCode, progress } = req.body; // progress contains scores for player 2, 3, 4
+
+    if (!playerId || !roomCode || !progress) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Find the session with matching playerId and roomCode
+    let gameSession = await MeetGamesession.findOne({
+      playerId: new mongoose.Types.ObjectId(playerId),
+      "levelScores.roomCode": roomCode,
+    });
+
+    if (!gameSession) {
+      return res.status(404).json({ message: "Game session not found" });
+    }
+
+    // Find the levelScores entry for the given roomCode
+    let levelScore = gameSession.levelScores.find(
+      (ls) => ls.roomCode === roomCode
+    );
+
+    if (!levelScore) {
+      return res.status(404).json({ message: "Room code not found in session" });
+    }
+
+    // Update player 2, 3, and 4 scores
+    levelScore.userprogress.forEach((userProgress, index) => {
+      if (index > 0) { // Update only players 2, 3, and 4
+        const updatedProgress = progress[index - 1];
+        userProgress.creativity = parseFloat((updatedProgress.creativity || userProgress.creativity).toFixed(2));
+        userProgress.strategicThinking = parseFloat((updatedProgress.strategicThinking || userProgress.strategicThinking).toFixed(2));
+        userProgress.fundamentalSkills = parseFloat((updatedProgress.fundamentalSkills || userProgress.fundamentalSkills).toFixed(2));
+        userProgress.managementSkills = parseFloat((updatedProgress.managementSkills || userProgress.managementSkills).toFixed(2));
+        userProgress.overallImpact = parseFloat((updatedProgress.overallImpact || userProgress.overallImpact).toFixed(2));
+
+
+
+      }
+    });
+
+    // Calculate average score per category for each player
+    levelScore.userprogress.forEach((userProgress) => {
+      const totalScore = [
+        userProgress.creativity,
+        userProgress.strategicThinking,
+        userProgress.fundamentalSkills,
+        userProgress.managementSkills,
+        userProgress.overallImpact,
+      ].reduce((acc, curr) => acc + curr, 0);
+
+      const avgScore = parseFloat((totalScore / 5).toFixed(2));
+
+      // Add avgScore to player progress
+      userProgress.avgScore = avgScore;
+    });
+
+    // Save the updated session
+    await gameSession.save();
+
+    // Prepare the response data
+    const playerResults = levelScore.userprogress.map((userProgress) => {
+      return {
+        playerId: userProgress.playerId._id,
+        playerName: userProgress.playerId.name, // Assuming 'name' field exists in Player model
+        avgScore: userProgress.avgScore,
+        categoryAverages: {
+          creativity: userProgress.creativity,
+          strategicThinking: userProgress.strategicThinking,
+          fundamentalSkills: userProgress.fundamentalSkills,
+          managementSkills: userProgress.managementSkills,
+          overallImpact: userProgress.overallImpact,
+        },
+      };
+    });
+
+    // Sort players by avgScore (descending order)
+    playerResults.sort((a, b) => b.avgScore - a.avgScore);
+
+    return res.status(200).json({
+      message: "Player scores updated and averages calculated successfully",
+      playerId: playerId,
+      playerResults,
+    });
+  } catch (error) {
+    console.error("Error updating player scores:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });

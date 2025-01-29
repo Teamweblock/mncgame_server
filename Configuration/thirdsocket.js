@@ -137,10 +137,15 @@ async function createMatch(io, matchedPlayers, waitingPlayers) {
     sockets.forEach((socket) => socket.join(roomCode));
     // console.log("Room created:", roomCode);
     // Extract playerIds
-    const playerIds = matchedPlayers.map(player => player.playerId);
+    const playerData = matchedPlayers.map(player => ({
+      playerId: player.playerId,
+      role: player.role
+    }));
+    
+    console.log("matchedPlayers with roles", playerData);
 
     const questions = await getThirdGameQuestions({
-      playerIds,
+      playerData,
       roomCode,
     });
     // console.log("questions:", questions);

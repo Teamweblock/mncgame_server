@@ -145,19 +145,21 @@ async function startQuestionTimer(io, roomCode, questions, players) {
 
   const que = questions[0].questions;
   let currentQuestionIndex = 0;
-  const questionDuration = 3 * 60 * 1000;
+  const questionDuration = 3 * 60 * 1000; // 3 minutes per question
   let questionTimer = null;
   let questionStartTime = Date.now();
 
+  // Track the state of each player
   const playerStates = players.reduce((acc, player) => {
     acc[player.playerId] = {
       answered: false,
       answer: null,
-      timeLeft: questionDuration / 1000,
+      timeLeft: questionDuration / 1000, // Time left in seconds
     };
     return acc;
   }, {});
 
+  // Function to send the next question
   function sendNextQuestion() {
     if (currentQuestionIndex >= que.length) {
       clearInterval(questionTimer);
@@ -168,6 +170,7 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     const question = que[currentQuestionIndex];
     console.log(`Sending question ${currentQuestionIndex + 1}/${que.length}:`, question);
 
+    // Reset player states for the new question
     Object.keys(playerStates).forEach((playerId) => {
       playerStates[playerId].answered = false;
       playerStates[playerId].answer = null;
@@ -175,72 +178,70 @@ async function startQuestionTimer(io, roomCode, questions, players) {
     });
 
     questionStartTime = Date.now();
-    players.forEach((player) => {
-      const playerSocket = io.sockets.sockets.get(player.socketId);
-      if (playerSocket) {
-        playerSocket.emit("joinRoom", { roomCode });
-      } else {
-        console.error(`Socket not found for player: ${player.playerId}`);
-      }
-    });
-
     io.to(roomCode).emit("newQuestion", {
       question,
       remainingTime: questionDuration / 1000,
     });
-    broadcastPlayerStates();
+
+    broadcastPlayerStates(); // Broadcast initial player states
     currentQuestionIndex++;
   }
 
+  // Function to broadcast player states to all players
   function broadcastPlayerStates() {
-    const currentQuestion = que[currentQuestionIndex] || {};
     const playerDetails = players.map((player) => ({
       playerId: player.playerId,
       firstName: player.firstName,
-      lastName: player.lastname,
+      lastName: player.lastName,
       avatar: player.avatar,
       answered: playerStates[player.playerId].answered,
       timeLeft: playerStates[player.playerId].timeLeft,
-      currentQuestionId: currentQuestion.questionId || null,
-      currentQuestionContent: currentQuestion.question || null,
     }));
 
     io.to(roomCode).emit("playerStates", playerDetails);
   }
 
+  // Function to check if all players have answered
   function checkAllAnswered() {
     return Object.values(playerStates).every((state) => state.answered);
   }
 
+  // Function to evaluate the current question
   function evaluateQuestion() {
     const results = players.map((player) => ({
       playerId: player.playerId,
       firstName: player.firstName,
-      lastName: player.lastname,
+      lastName: player.lastName,
       answer: playerStates[player.playerId].answer,
       answered: playerStates[player.playerId].answered,
     }));
+
     io.to(roomCode).emit("questionResults", results);
   }
 
+  // Function to handle answer submission
   function handleAnswer(playerId, answer) {
     if (!playerStates[playerId] || playerStates[playerId].answered) return;
 
     playerStates[playerId].answered = true;
     playerStates[playerId].answer = answer;
+    playerStates[playerId].timeLeft = 0; // Stop the timer for this player
+
     broadcastPlayerStates();
 
     if (checkAllAnswered()) {
-      clearTimeout(questionTimer); // Stop the timer early
+      clearInterval(questionTimer); // Stop the timer early
       evaluateQuestion();
       setTimeout(sendNextQuestion, 3000); // Delay before sending the next question
     }
   }
 
+  // Start the question timer
   questionTimer = setInterval(() => {
     const elapsedTime = Date.now() - questionStartTime;
     const remainingTime = Math.max(0, questionDuration - elapsedTime);
 
+    // Update time left for each player
     Object.keys(playerStates).forEach((playerId) => {
       if (!playerStates[playerId].answered) {
         playerStates[playerId].timeLeft = Math.ceil(remainingTime / 1000);
@@ -249,8 +250,9 @@ async function startQuestionTimer(io, roomCode, questions, players) {
 
     broadcastPlayerStates();
 
+    // If time is up, evaluate the question and move to the next one
     if (remainingTime <= 0) {
-      clearTimeout(questionTimer);
+      clearInterval(questionTimer);
       evaluateQuestion();
       setTimeout(sendNextQuestion, 3000);
     }
