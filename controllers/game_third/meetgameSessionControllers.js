@@ -233,7 +233,7 @@ module.exports.updateProgress = catchAsyncErrors(async (req, res) => {
   }
 });
 
-module.exports.getPlayerResults = catchAsyncErrors(async (req, res) => {
+module.exports.PlayerResults = catchAsyncErrors(async (req, res) => {
   try {
     const user = req.user;
     const playerId = user._id; // Player 1 (the main player)

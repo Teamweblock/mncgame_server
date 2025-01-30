@@ -449,25 +449,6 @@ module.exports.getWeeklyAnalysis = catchAsyncErrors(async (req, res) => {
   }
 
   try {
-    // // Calculate the start and end dates for the current week if not provided
-    // if (!startDate || !endDate) {
-    //   const currentDate = new Date();
-    //   const dayOfWeek = currentDate.getDay(); // 0 (Sunday) to 6 (Saturday)
-    //   const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek; // Calculate difference to Monday
-    //   const monday = new Date(currentDate);
-    //   monday.setDate(currentDate.getDate() + diffToMonday); // Set to the current week's Monday
-    //   monday.setHours(0, 0, 0, 0); // Set to start of the day
-
-    //   const sunday = new Date(monday);
-    //   sunday.setDate(monday.getDate() + 6); // Set to the current week's Sunday
-    //   sunday.setHours(23, 59, 59, 999); // Set to end of the day
-
-    //   startDate = monday;
-    //   endDate = sunday;
-    // } else {
-    //   startDate = new Date(startDate);
-    //   endDate = new Date(endDate);
-    // }
 
     // Calculate the last 7 days (including today) if dates are not provided
     if (!startDate || !endDate) {
@@ -486,10 +467,10 @@ module.exports.getWeeklyAnalysis = catchAsyncErrors(async (req, res) => {
     }
 
     // Validate the dates
-    validateDates(startDate, endDate);
+    const dates = validateDates(startDate, endDate);
 
     // Fetch the report
-    const report = await getWeeklyAnalysis(playerId, startDate, endDate);
+    const report = await getWeeklyAnalysis(playerId, dates.startDate, dates.endDate);
 
     return res.status(200).json(report);
   } catch (error) {
@@ -648,11 +629,12 @@ module.exports.gameOverview = catchAsyncErrors(async (req, res) => {
 
   try {
     // Validate dates
-    validateDates(startDate, endDate);
+    const dates = validateDates(startDate, endDate);
     // Initialize the response object
     const response = {
       datasets: []
     };
+    console.log("dates", dates);
 
     // Loop through each gameType and fetch the corresponding data
     for (const gameType of gameTypes) {
@@ -677,7 +659,7 @@ module.exports.gameOverview = catchAsyncErrors(async (req, res) => {
       }
 
       // Fetch the game data for the specific game type
-      const gameData = await fetchGameData(gameSession, playerId, timeRange, startDate, endDate);
+      const gameData = await fetchGameData(gameSession, playerId, timeRange, dates.startDate, dates.endDate);
 
       // Extract the labels (dates) and the corresponding data
       const labels = gameData.map((item) => item._id);
@@ -717,11 +699,11 @@ module.exports.problemPilotOverview = catchAsyncErrors(async (req, res) => {
 
   try {
     // Validate dates
-    validateDates(startDate, endDate);
+    const dates = validateDates(startDate, endDate);
 
     // Fetch data for both single and multiple game sessions
-    const gameData = await fetchGameData(SingleGameSession, playerId, timeRange, startDate, endDate);
-    const multigameData = await fetchGameData(MultipleGameSession, playerId, timeRange, startDate, endDate);
+    const gameData = await fetchGameData(SingleGameSession, playerId, timeRange, dates.startDate, dates.endDate);
+    const multigameData = await fetchGameData(MultipleGameSession, playerId, timeRange, dates.startDate, dates.endDate);
 
     // Combine labels and data
     const labels = [
@@ -790,8 +772,8 @@ module.exports.entrepreneurialEdgeOverview = catchAsyncErrors(async (req, res) =
 
   try {
     // Validate dates
-    validateDates(startDate, endDate);
-    const gameData = await fetchGameData(SecondGameSession, playerId, timeRange, startDate, endDate);
+    const dates = validateDates(startDate, endDate);
+    const gameData = await fetchGameData(SecondGameSession, playerId, timeRange, dates.startDate, dates.endDate);
 
     const labels = gameData.map((item) => item._id);
     const data = gameData.map((item) => item.averageScore);
@@ -827,8 +809,8 @@ module.exports.strategyTrialOverview = catchAsyncErrors(async (req, res) => {
 
   try {
     // Validate dates
-    validateDates(startDate, endDate);
-    const gameData = await fetchGameData(MeetGameGameSession, playerId, timeRange, startDate, endDate);
+    const dates = validateDates(startDate, endDate);
+    const gameData = await fetchGameData(MeetGameGameSession, playerId, timeRange, dates.startDate, dates.endDate);
 
     const labels = gameData.map((item) => item._id);
     const data = gameData.map((item) => item.averageScore);

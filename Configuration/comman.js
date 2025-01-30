@@ -18,10 +18,31 @@ const validateDates = (startDate, endDate) => {
     throw new Error("Invalid endDate format. Use YYYY-MM-DD.");
   }
 
+  // Convert to Date objects
+  const start = new Date(startDate);
+  let end = new Date(endDate);
+
   // Check if startDate is before endDate
-  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+  if (start > end) {
     throw new Error("startDate must be earlier than or equal to endDate.");
   }
+
+  // If startDate and endDate are on the same day, adjust endDate to 23:59:59.999
+  if (
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate()
+  ) {
+    // Set startDate to the beginning of the day (UTC)
+    start.setUTCHours(0, 0, 0, 0);
+  }
+
+  // Set startDate to the beginning of the day (UTC)
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+  };
+
 };
 
 const getWeeklyAnalysis = async (playerId, startDate, endDate) => {
@@ -277,7 +298,6 @@ const getThirdGameQuestions = async ({
   playerData, // Accept an array of player objects containing playerId and role
   roomCode,
 }) => {
-  console.log("playerData", playerData);
   try {
     // Fetch all questions from the Questions model
     const allQuestions = await thirdQuestion.find();
@@ -291,7 +311,6 @@ const getThirdGameQuestions = async ({
 
     // Initialize results array
     const results = [];
-    console.log("randomQuestion", randomQuestion);
 
     // Process each playerData which includes playerId and role
     for (const { playerId, role } of playerData) {

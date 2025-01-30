@@ -20,7 +20,7 @@ const {
 const {
   joinmeetGame,
   updateProgress,
-  getPlayerResults
+  PlayerResults
 } = require("../controllers/game_third/meetgameSessionControllers");
 /*  Role crud section  */
 
@@ -67,6 +67,6 @@ router.post("/joinmeetGame", isAuthenticatedUser, joinmeetGame);
 router.post("/updateProgress", isAuthenticatedUser, updateProgress);
 
 // get result
-router.post("/PlayerResults", isAuthenticatedUser, getPlayerResults);
+router.post("/PlayerResults", isAuthenticatedUser, PlayerResults);
 
 module.exports = router;
